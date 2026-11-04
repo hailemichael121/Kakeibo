@@ -1,0 +1,60 @@
+appId: com.kakeibo.desktop
+productName: Kakeibo
+copyright: Copyright © 2026 Kakeibo
+directories:
+  output: release
+  buildResources: desktop/build
+files:
+  - dist/**/*
+  - desktop/main.cjs
+  - desktop/preload.cjs
+  - desktop/lan.cjs
+  - desktop/build/icon.png
+  - desktop/build/tray.png
+  - "!node_modules/**/*"
+
+asar: true
+compression: maximum
+electronLanguages:
+  - en-US
+win:
+  target:
+    - nsis
+  icon: desktop/build/icon.ico
+  artifactName: Kakeibo-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Kakeibo
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: desktop/build/icon.png
+  category: Office
+  maintainer: Kakeibo <hello@kakeibo.example>
+  synopsis: Mindful offline-first personal budgeting
+  description: Kakeibo helps you reflect on spending and manage a monthly budget on your own device.
+  artifactName: Kakeibo-${version}.${ext}
+  syncDesktopName: true
+deb:
+  artifactName: kakeibo_${version}_${arch}.${ext}
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+mac:
+  target:
+    - dmg
+  icon: desktop/build/icon.png
+  category: public.app-category.productivity
+  artifactName: Kakeibo-${version}.${ext}

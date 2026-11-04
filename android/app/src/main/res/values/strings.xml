@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kakeibo</string>
+    <string name="title_activity_main">Kakeibo</string>
+    <string name="package_name">com.kakeibo.app</string>
+    <string name="custom_url_scheme">com.kakeibo.app</string>
+</resources>

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="#F3F1EB">
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Kakeibo"
+        android:textColor="#343D35"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_spendable_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="SPENDABLE LEFT"
+        android:textColor="#6B6B6B"
+        android:textSize="9sp"
+        android:letterSpacing="0.1" />
+
+    <TextView
+        android:id="@+id/widget_spendable_left"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="—"
+        android:textColor="#343D35"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_spent"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Spent: —"
+            android:textColor="#6B6B6B"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/widget_spendable"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Spendable: —"
+            android:textColor="#6B6B6B"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+</LinearLayout>
