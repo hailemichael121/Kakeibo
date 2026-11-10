@@ -4,4 +4,5 @@
     <string name="title_activity_main">Kakeibo</string>
     <string name="package_name">com.kakeibo.app</string>
     <string name="custom_url_scheme">com.kakeibo.app</string>
+    <string name="widget_description">See what is left to spend without opening Kakeibo.</string>
 </resources>

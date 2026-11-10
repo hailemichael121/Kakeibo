@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf'
 import {
   ArrowDownToLine, ArrowLeft, ArrowUpFromLine, BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight,
   CircleHelp, Clock3, Coffee, Download, FileSpreadsheet, Heart, House, Info,
-  MoreHorizontal, Pencil, Plus, RefreshCw, Search, SettingsIcon, ShoppingBag, Sun, Trash2, Umbrella, Wallet, X,
+  MoreHorizontal, Pencil, Plus, RefreshCw, Search, SettingsIcon, ShoppingBag, Smartphone, Sun, Trash2, Umbrella, Wallet, X,
    Home, BookOpen as BookOpenIcon, BarChart3 as BarChartIcon, Clock3 as ClockIcon, Heart as HeartIcon
 } from 'lucide-react'
 import { db, amountText, defaultSettings, monthKey, uid, type AppSettings, type AuditEntry, type Category, type Expense, type MonthPlan } from '@/db/db'
@@ -17,7 +17,8 @@ import { shareBytes } from '@/services/share'
 import { SyncScreen } from './SyncScreen'
 import { JournalScreen } from './JournalScreen'
 import { applyTheme } from '@/theme'
-import { updateHomeWidget } from '@/lib/widget'
+import { addHomeWidget, canAddHomeWidget, closeWidgetQuickAdd, updateHomeWidget } from '@/lib/widget'
+import { WidgetQuickAdd } from './WidgetQuickAdd'
 import { scheduleKakeiboReminders } from '@/lib/reminders'
 import { TimePicker } from './TimePicker'
 import { Toggle } from './Toggle'
@@ -72,6 +73,8 @@ export function App() {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [calendarDay, setCalendarDay] = useState('')
   const calendarRef = useRef<HTMLDivElement>(null)
+  const widgetQuickAdd = useMemo(() => new URLSearchParams(window.location.search).has('widgetQuickAdd'), [])
+  const [widgetNudgeVisible, setWidgetNudgeVisible] = useState(() => canAddHomeWidget() && window.localStorage.getItem('kakeibo.widgetNudgeSeen') !== '1')
 
   const refresh = useCallback(async () => {
     const [nextSettings, allExpenses, monthPlan, logs, allPlans] = await Promise.all([
@@ -178,6 +181,39 @@ export function App() {
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not save settings') }
   }
 
+  async function handleAddWidget() {
+    const result = await addHomeWidget()
+    if (result === 'pinned') notify('Follow the prompt on your home screen to place the Kakeibo widget.')
+    else if (result === 'unsupported') notify('Your launcher does not support adding widgets from apps. Long-press the home screen and open Widgets.')
+    else notify('The home screen widget is available in the Android app.')
+  }
+
+  function dismissWidgetNudge() {
+    window.localStorage.setItem('kakeibo.widgetNudgeSeen', '1')
+    setWidgetNudgeVisible(false)
+  }
+
+  async function handleAddWidgetFromNudge() {
+    await handleAddWidget()
+    dismissWidgetNudge()
+  }
+
+  async function handleWidgetQuickAdd(amount: number, category: string): Promise<boolean> {
+    try {
+      await saveExpense({ amount, category, pause: 'Needed it', date: new Date().toISOString() })
+      await refresh()
+      window.setTimeout(() => { void closeWidgetQuickAdd() }, 120)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  if (widgetQuickAdd) {
+    if (isLoading) return <div className="quickadd-backdrop"><section className="quickadd-card quickadd-loading">Preparing quick add…</section></div>
+    return <WidgetQuickAdd currency={settings.currency} categories={activeCategories} onClose={() => void closeWidgetQuickAdd()} onSave={handleWidgetQuickAdd} />
+  }
+
   if (isLoading) return <LoadingSkeleton />
   const monthControl = <div className="month-control" ref={calendarRef}>
     <button aria-label="Previous month" onClick={() => shiftMonth(-1)}><ChevronLeft size={17} /></button>
@@ -227,11 +263,11 @@ export function App() {
           </div>
           <div className="top-actions">{monthControl}</div>
         </header>
-        {screen === 'Home' && <HomeScreen budget={budget} plan={plan} month={month} expenses={expenses} settings={settings} categories={activeCategories} onAdd={openNewExpense} onEdit={(e) => { setEditing(e); setExpenseOpen(true) }} onDelete={handleDelete} onRitual={() => setScreen('Ritual')} onInsights={() => setScreen('Insights')} onPlanSaved={async (values) => { await savePlan({ ...values, id: month }); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onSetupComplete={() => void handleSaveSettings({ onboarded: true })} />}
+        {screen === 'Home' && <HomeScreen budget={budget} plan={plan} month={month} expenses={expenses} settings={settings} categories={activeCategories} onAdd={openNewExpense} onEdit={(e) => { setEditing(e); setExpenseOpen(true) }} onDelete={handleDelete} onRitual={() => setScreen('Ritual')} onInsights={() => setScreen('Insights')} onPlanSaved={async (values) => { await savePlan({ ...values, id: month }); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onSetupComplete={() => void handleSaveSettings({ onboarded: true })} showWidgetNudge={widgetNudgeVisible && settings.onboarded} onAddWidget={() => void handleAddWidgetFromNudge()} onDismissWidgetNudge={dismissWidgetNudge} />}
         {screen === 'Insights' && <InsightsScreen expenses={expenses} budget={budget} categories={activeCategories} currency={settings.currency} previousSpent={previousSpent} />}
         {screen === 'History' && <HistoryScreen expenses={expenses} categories={activeCategories} currency={settings.currency} search={search} onSearch={setSearch} filter={filterCategory} onFilter={setFilterCategory} onEdit={(e) => { setEditing(e); setExpenseOpen(true) }} onDelete={handleDelete} onExport={() => void exportExcel(expenses, settings.currency, month, notify)} onPdf={() => void exportPdf(expenses, settings.currency, month, notify)} onImport={(rows) => void importExpenses(rows, settings, refresh, notify)} />}
         {screen === 'Journal' && <JournalScreen onChanged={refresh} notify={notify} />}
-        {screen === 'Settings' && <SettingsScreen settings={settings} plan={plan} onSave={handleSaveSettings} onPlanSave={async (values) => { await savePlan({ ...values, id: month }); await refresh(); notify('Monthly plan saved'); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onDemoChange={async (enabled) => { await toggleDemo(enabled, settings, handleSaveSettings, month); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onExport={() => void exportBackup(notify)} onImport={(file) => void importBackup(file, refresh, notify)} onAudit={() => setScreen('Audit')} onSync={() => setScreen('Sync')} onAbout={() => setScreen('About')} />}
+        {screen === 'Settings' && <SettingsScreen settings={settings} plan={plan} onSave={handleSaveSettings} onPlanSave={async (values) => { await savePlan({ ...values, id: month }); await refresh(); notify('Monthly plan saved'); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onDemoChange={async (enabled) => { await toggleDemo(enabled, settings, handleSaveSettings, month); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onExport={() => void exportBackup(notify)} onImport={(file) => void importBackup(file, refresh, notify)} onAudit={() => setScreen('Audit')} onSync={() => setScreen('Sync')} onAbout={() => setScreen('About')} onAddWidget={canAddHomeWidget() ? () => void handleAddWidget() : undefined} />}
         {screen === 'Ritual' && <RitualScreen step={ritualStep} onStep={setRitualStep} month={month} plan={plan} reflection={reflection} budget={budget} expenses={expenses} settings={settings} onPlanSaved={async (values) => { await savePlan({ ...values, id: month }); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onReflected={async (chips, note) => { await saveReflection({ id: month, chips, note }); await refresh(); notify('Reflection saved') }} />}
         {screen === 'Audit' && <AuditScreen logs={audit} search={search} onSearch={setSearch} />}
         {screen === 'Sync' && <SyncScreen onBack={() => setScreen('Settings')} onMerged={refresh} notify={notify} />}
@@ -276,9 +312,10 @@ function SpendRing({ left, spendable, currency, savings }: { left: number; spend
 
 
 
-function HomeScreen({ budget, plan, month, expenses, settings, categories, onAdd, onEdit, onDelete, onRitual, onInsights, onPlanSaved, onSetupComplete }: {
+function HomeScreen({ budget, plan, month, expenses, settings, categories, onAdd, onEdit, onDelete, onRitual, onInsights, onPlanSaved, onSetupComplete, showWidgetNudge, onAddWidget, onDismissWidgetNudge }: {
   budget: ReturnType<typeof calculateBudget>; plan?: MonthPlan; month: string; expenses: Expense[]; settings: AppSettings; categories: Category[]
   onAdd: () => void; onEdit: (expense: Expense) => void; onDelete: (id: string) => void; onRitual: () => void; onInsights: () => void; onPlanSaved: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onSetupComplete: () => void
+  showWidgetNudge: boolean; onAddWidget: () => void; onDismissWidgetNudge: () => void
 }) {
   const hasPlan = !!plan
   const hour = new Date().getHours()
@@ -286,6 +323,11 @@ function HomeScreen({ budget, plan, month, expenses, settings, categories, onAdd
   return <div className="page-stack">
     {!settings.onboarded && <OnboardingCard settings={settings} month={month} plan={plan} onSave={onPlanSaved} onComplete={onSetupComplete} />}
     <h2 className="home-greeting">{greeting}</h2>
+    {showWidgetNudge && <section className="widget-nudge" aria-label="Home screen widget suggestion">
+      <span className="widget-nudge-icon"><Smartphone size={16} /></span>
+      <span className="widget-nudge-copy"><b>Use the Kakeibo home widget</b><small>See spendable left at a glance and tap + Add to log an expense without opening the app.</small></span>
+      <div className="widget-nudge-actions"><button className="button-primary widget-nudge-add" onClick={onAddWidget}>Add widget</button><button className="icon-button widget-nudge-close" aria-label="Not now" onClick={onDismissWidgetNudge}><X size={15} /></button></div>
+    </section>}
     <SpendRing left={budget.spendableLeft} spendable={budget.spendable} currency={settings.currency} savings={budget.savings} />
     {budget.startingSpent > 0 && <p className="starting-spend-note">Spendable left includes {currencyAmount(budget.startingSpent, settings.currency)} spent before Kakeibo.</p>}
     {!hasPlan && <button className="setup-nudge" onClick={onRitual}><span className="nudge-icon"><Heart size={17} /></span><span><b>Begin with your plan</b><small>Add income and fixed costs to see your spendable amount.</small></span><ChevronRight size={19} /></button>}
@@ -608,7 +650,7 @@ function HistoryScreen({ expenses, categories, currency, search, onSearch, filte
     const key = expense.date.slice(0, 10)
     byDay.set(key, [...(byDay.get(key) ?? []), expense])
   }
-  return <div className="panel history-panel"><div className="history-toolbar"><label className="search-field"><Search size={16} /><input placeholder="Search expenses" value={search} onChange={(e) => onSearch(e.target.value)} /></label><select value={filter} onChange={(e) => onFilter(e.target.value)}><option>All</option>{categories.map((c) => <option key={c.id}>{c.name}</option>)}</select>    <button className="button-quiet" onClick={onExport}><FileSpreadsheet size={15} /> Excel</button><button className="button-quiet" onClick={onPdf}><Download size={15} /> PDF</button><label className="button-quiet file-import"><ArrowUpFromLine size={15} /> Import<input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setReading(true); setImportError(''); void parseImportFile(file).then((result) => { if (!result.rows.length) throw new Error('No valid expenses found. Include Amount and Category columns.') ; setPreview({ fileName: file.name, ...result }) }).catch((error: unknown) => setImportError(error instanceof Error ? error.message : 'Could not read this spreadsheet.')).finally(() => setReading(false)) } e.currentTarget.value = '' }} /></label></div>
+  return <div className="panel history-panel"><div className="history-toolbar"><label className="search-field"><Search size={16} /><input placeholder="Search expenses" value={search} onChange={(e) => onSearch(e.target.value)} /></label><select value={filter} onChange={(e) => onFilter(e.target.value)}><option>All</option>{categories.map((c) => <option key={c.id}>{c.name}</option>)}</select><div className="history-actions"><button className="button-quiet" onClick={onExport}><FileSpreadsheet size={15} /> Excel</button><button className="button-quiet" onClick={onPdf}><Download size={15} /> PDF</button><label className="button-quiet file-import"><ArrowUpFromLine size={15} /> Import<input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setReading(true); setImportError(''); void parseImportFile(file).then((result) => { if (!result.rows.length) throw new Error('No valid expenses found. Include Amount and Category columns.') ; setPreview({ fileName: file.name, ...result }) }).catch((error: unknown) => setImportError(error instanceof Error ? error.message : 'Could not read this spreadsheet.')).finally(() => setReading(false)) } e.currentTarget.value = '' }} /></label></div></div>
     {byDay.size ? [...byDay.entries()].map(([day, items]) => <section className="history-day" key={day}><div className="day-head"><span>{new Date(day + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span><b>{currencyAmount(items.reduce((sum, e) => sum + e.amount, 0), currency)}</b></div>{items.map((e) => <ExpenseRow key={e.id} expense={e} category={categories.find((c) => c.name === e.category)} currency={currency} onEdit={onEdit} onDelete={onDelete} />)}</section>) : <EmptyState title={search ? 'Nothing found.' : 'No choices yet.'} detail={search ? 'Try another search.' : 'Add your first expense when you’re ready.'} />}
     {importError && <p className="import-error" role="alert">{importError}</p>}
     {reading && <div className="import-status">Reading your spreadsheet…</div>}
@@ -645,11 +687,12 @@ function RitualScreen({ step, onStep, month, plan, reflection, budget, expenses,
     </section></div>
 }
 
-function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onExport, onImport, onAudit, onSync, onAbout }: {
+function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onExport, onImport, onAudit, onSync, onAbout, onAddWidget }: {
   settings: AppSettings; plan?: MonthPlan; onSave: (patch: Partial<AppSettings>) => Promise<void>; onPlanSave: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onDemoChange: (enabled: boolean) => void; onExport: () => void; onImport: (file: File) => void; onAudit: () => void; onSync: () => void
   onAbout: () => void
+  onAddWidget?: () => void
 }) {
-  const [settingsOpen, setSettingsOpen] = useState<Record<string, boolean>>({ month: true, categories: false, feel: true, reminders: false, data: false, about: false, demo: false })
+  const [settingsOpen, setSettingsOpen] = useState<Record<string, boolean>>({ month: true, categories: false, feel: true, widget: true, reminders: false, data: false, about: false, demo: false })
   const toggle = (key: string) => setSettingsOpen((s) => ({ ...s, [key]: !s[key] }))
   const [categories, setCategories] = useState(settings.categories)
   const [editingId, setEditingId] = useState<string>()
@@ -698,6 +741,7 @@ function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onEx
     </section>
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('categories')}><span className="settings-icon"><MoreHorizontal size={18} /></span><div><h2>Your categories</h2><small>Four gentle buckets. Make them yours.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.categories ? 'open' : ''}`} /></header>{settingsOpen.categories && <><div className="settings-categories">{categories.map((category) => <div className={`settings-category ${category.archived ? 'archived' : ''}`} key={category.id}>{editingId === category.id ? <><input autoFocus value={categoryName} onChange={(e) => setCategoryName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, name: categoryName.trim() || c.name } : c)); setEditingId(undefined) } }} /><button onClick={() => { void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, name: categoryName.trim() || c.name } : c)); setEditingId(undefined) }}><Check size={15} /></button></> : <><CategoryIcon category={category} /><b>{category.name}</b><select aria-label={`Icon for ${category.name}`} value={category.icon} onChange={(e) => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, icon: e.target.value } : c))}>{Object.keys(CATEGORY_ICONS).map((icon) => <option key={icon}>{icon}</option>)}</select><input aria-label={`${category.name} color`} type="color" value={category.color} onChange={(e) => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, color: e.target.value } : c))} /><button title="Rename" onClick={() => beginEdit(category)}><Pencil size={14} /></button><button title={category.archived ? 'Unarchive' : 'Archive'} onClick={() => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, archived: !c.archived } : c))}>{category.archived ? <ArrowUpFromLine size={15} /> : <Trash2 size={14} />}</button></>}</div>)}</div><button className="text-button add-category" onClick={() => { const name = window.prompt('Name your new category'); if (!name?.trim()) return; void saveCategoryList([...categories, { id: uid(), name: name.trim(), icon: 'ShoppingBag', color: '#A8ACCB', archived: false }]) }}><Plus size={16} /> Add category</button></>}</section>
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('feel')}><span className="settings-icon"><Sun size={18} /></span><div><h2>Appearance</h2><small>Quiet, comfortable, and yours.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.feel ? 'open' : ''}`} /></header>{settingsOpen.feel && <><div className="settings-row"><span>Theme</span><Select value={settings.theme} onChange={(v) => void onSave({ theme: v as AppSettings['theme'] })} options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'auto', label: 'Match device' }]} /></div></>}</section>
+    {onAddWidget && <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('widget')}><span className="settings-icon"><Plus size={18} /></span><div><h2>Home screen widget</h2><small>See what is left without opening Kakeibo.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.widget ? 'open' : ''}`} /></header>{settingsOpen.widget && <div className="settings-row"><span>Add the spendable-left widget to your home screen</span><button className="button-quiet" onClick={onAddWidget}><Plus size={16} /> Add widget</button></div>}</section>}
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('reminders')}><span className="settings-icon"><Clock3 size={18} /></span><div><h2>Reminders</h2><small>Gentle nudges to register your spending.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.reminders ? 'open' : ''}`} /></header>{settingsOpen.reminders && <><div className="settings-row"><span>Enable reminders</span><Toggle checked={remindersEnabled} onChange={(v) => { setRemindersEnabled(v); void onSave({ remindersEnabled: v }) }} /></div><div className="settings-row"><span>Midday reminder</span><TimePicker value={reminderMiddayTime} onChange={(v) => { setReminderMiddayTime(v); void onSave({ reminderMiddayTime: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Night reminder</span><TimePicker value={reminderNightTime} onChange={(v) => { setReminderNightTime(v); void onSave({ reminderNightTime: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Weekly report</span><Toggle checked={reminderWeeklyEnabled} onChange={(v) => { setReminderWeeklyEnabled(v); void onSave({ reminderWeeklyEnabled: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Weekly report day</span><Select value={reminderWeeklyDay} onChange={(v) => { setReminderWeeklyDay(v); void onSave({ reminderWeeklyDay: Number(v) }) }} disabled={!remindersEnabled || !reminderWeeklyEnabled} options={[{ value: '0', label: 'Sunday' }, { value: '1', label: 'Monday' }, { value: '2', label: 'Tuesday' }, { value: '3', label: 'Wednesday' }, { value: '4', label: 'Thursday' }, { value: '5', label: 'Friday' }, { value: '6', label: 'Saturday' }]} /></div></>}</section>
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('data')}><span className="settings-icon"><ArrowDownToLine size={18} /></span><div><h2>Your data</h2><small>Keep a copy or move it with you.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.data ? 'open' : ''}`} /></header>{settingsOpen.data && <div className="data-actions"><button className="button-quiet" onClick={onExport}><Download size={16} /> Backup data</button><label className="button-quiet file-import"><ArrowUpFromLine size={16} /> Restore backup<input type="file" accept=".json" onChange={(e) => { const file = e.target.files?.[0]; if (file) onImport(file); e.currentTarget.value = '' }} /></label><button className="button-quiet" onClick={onSync}><RefreshCw size={16} /> Sync devices</button><button className="button-quiet" onClick={onAudit}><Clock3 size={16} /> View audit log</button></div>}</section>
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('about')}><span className="settings-icon"><Info size={18} /></span><div><h2>About Kakeibo</h2><small>Its roots, purpose, and categories</small></div><ChevronRight size={18} className={`chev ${settingsOpen.about ? 'open' : ''}`} /></header>{settingsOpen.about && <button className="settings-link" onClick={onAbout}><span><b>Explore Kakeibo</b><small>Open the illustrated guide and monthly practice.</small></span><ChevronRight size={18} /></button>}</section>
