@@ -37,6 +37,17 @@ async function seedImportFile(): Promise<string> {
   return path
 }
 
+async function writeJsonFile(name: string, payload: unknown): Promise<string> {
+  const path = `/tmp/opencode/${name}.json`
+  await writeFile(path, JSON.stringify(payload))
+  return path
+}
+
+function currentMonthDate(day: number): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
 async function addExpense(page: Page, amount = '12.5', details?: { from: string; to: string; people: string }) {
   await page.locator('.sidebar-add').click()
   await expect(page.getByRole('dialog', { name: 'Add expense' })).toBeVisible()
@@ -189,6 +200,103 @@ test.describe('Kakeibo app', () => {
     await preview.getByRole('button', { name: 'Import 4 expenses' }).click()
     await expect(page.getByRole('status')).toContainText('No new expenses · 4 duplicates skipped')
     await expect(page.locator('.expense-row')).toHaveCount(5)
+  })
+
+  test('imports a transactions seed after choosing its period and mapping categories', async ({ page }) => {
+    await completeOnboarding(page)
+    await page.locator('.side-nav button', { hasText: 'History' }).click()
+    const seedPath = await writeJsonFile('kakeibo-e2e-transactions', {
+      schemaVersion: '1.0',
+      type: 'expense-seed',
+      currency: 'ETB',
+      period: { startDay: 2, endDay: 4, label: 'Salary cycle' },
+      transactions: [
+        { id: 'seed-001', day: 2, amount: 300, description: 'Metshaf gift', category: 'Gifts', pause: 'Regret it', people: '2' },
+        { id: 'seed-002', day: 3, amount: 1200, description: 'Family gathering payment', category: 'Family' },
+        { id: 'seed-003', day: 4, amount: 45, description: 'Taxi to work', category: 'Transport', from: 'Work', to: 'Home' },
+      ],
+    })
+    const preview = page.getByRole('dialog', { name: 'Review import' })
+
+    await page.locator('.history-actions input[type="file"]').setInputFiles(seedPath)
+    await expect(preview).toBeVisible()
+    await expect(preview).toContainText('3 records need a period')
+    await expect(preview.getByRole('button', { name: 'Import 0 expenses' })).toBeDisabled()
+
+    await preview.getByLabel('Period start', { exact: true }).fill(currentMonthDate(2))
+    await expect(preview.getByLabel('Period end', { exact: true })).toHaveValue(currentMonthDate(4))
+    await expect(preview).toContainText('3 ready to import')
+    await expect(preview).toContainText(currentMonthDate(2))
+    await expect(preview.getByRole('button', { name: 'Import 3 expenses' })).toBeDisabled()
+
+    await preview.getByLabel('Map Gifts to a category').selectOption('Extra')
+    await preview.getByLabel('Map Family to a category').selectOption('Survival')
+    await preview.getByLabel('Map Transport to a category').selectOption('Optional')
+    await expect(preview.getByRole('button', { name: 'Import 3 expenses' })).toBeEnabled()
+    await preview.getByRole('button', { name: 'Import 3 expenses' }).click()
+
+    await expect(page.getByRole('status')).toContainText('3 expenses imported')
+    await expect(page.locator('.expense-row')).toHaveCount(3)
+    const gift = page.locator('.expense-row', { hasText: 'Metshaf gift' })
+    await expect(gift).toContainText('Extra')
+    await expect(gift).toContainText('Regret')
+    await expect(gift).toContainText('2 people')
+    await expect(page.locator('.expense-row', { hasText: 'Family gathering payment' })).toContainText('Survival')
+    await expect(page.locator('.expense-row', { hasText: 'Taxi to work' })).toContainText('Work → Home')
+  })
+
+  test('imports a standalone array and resolves day-only dates from a chosen period', async ({ page }) => {
+    await completeOnboarding(page)
+    await page.locator('.side-nav button', { hasText: 'History' }).click()
+    const seedPath = await writeJsonFile('kakeibo-e2e-array', [
+      { amount: 180, category: 'Survival', date: currentMonthDate(1), description: 'Taxi to work', people: 2 },
+      { amount: 260, category: 'Optional', day: 15, description: 'Shared transport', from: 'Megenagna', to: 'Bole', peopleCount: 4 },
+    ])
+    const preview = page.getByRole('dialog', { name: 'Review import' })
+
+    await page.locator('.history-actions input[type="file"]').setInputFiles(seedPath)
+    await expect(preview).toBeVisible()
+    await expect(preview).toContainText('1 record needs a period')
+    await expect(preview.getByRole('button', { name: 'Import 1 expense' })).toBeDisabled()
+
+    await preview.getByLabel('Period start', { exact: true }).fill(currentMonthDate(1))
+    await preview.getByLabel('Period end', { exact: true }).fill(currentMonthDate(28))
+    await expect(preview).toContainText('2 ready to import')
+    await expect(preview).toContainText(currentMonthDate(15))
+    await expect(preview.getByRole('button', { name: 'Import 2 expenses' })).toBeEnabled()
+    await preview.getByRole('button', { name: 'Import 2 expenses' }).click()
+
+    await expect(page.getByRole('status')).toContainText('2 expenses imported')
+    await expect(page.locator('.expense-row')).toHaveCount(2)
+    const shared = page.locator('.expense-row', { hasText: 'Shared transport' })
+    await expect(shared).toContainText('Megenagna → Bole')
+    await expect(shared).toContainText('4 people')
+    await expect(page.locator('.expense-row', { hasText: 'Taxi to work' })).toContainText('2 people')
+  })
+
+  test('imports a backup expenses table without inventing a pause', async ({ page }) => {
+    await completeOnboarding(page)
+    await page.locator('.side-nav button', { hasText: 'History' }).click()
+    const backupPath = await writeJsonFile('kakeibo-e2e-backup-table', {
+      version: 1,
+      exportedAt: '2026-11-04T12:00:00.000Z',
+      tables: {
+        expenses: [{ id: 'backup-1', amount: 95, category: 'Culture', date: '2026-11-04', note: 'Museum' }],
+      },
+    })
+    const preview = page.getByRole('dialog', { name: 'Review import' })
+
+    await page.locator('.history-actions input[type="file"]').setInputFiles(backupPath)
+    await expect(preview).toBeVisible()
+    await expect(preview).toContainText('1 ready to import')
+    await preview.getByRole('button', { name: 'Import 1 expense' }).click()
+
+    await expect(page.getByRole('status')).toContainText('1 expense imported')
+    const row = page.locator('.expense-row', { hasText: 'Museum' })
+    await expect(row).toContainText('Culture')
+    await expect(row).not.toContainText('Needed it')
+    await expect(row).not.toContainText('Wanted it')
+    await expect(row).not.toContainText('Regret')
   })
 
   test('Excel export and import preserve optional expense details', async ({ page }) => {

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#F3F1EB" />
+    <link rel="icon" type="image/svg+xml" href="./kakeibo.svg" />
+    <link rel="apple-touch-icon" href="./kakeibo.png" />
+    <script>if (new URLSearchParams(location.search).has('widgetQuickAdd')) document.documentElement.classList.add('widget-quick-add')</script>
+    <style>html.widget-quick-add,html.widget-quick-add body,html.widget-quick-add #root{background:transparent!important}</style>
+    <title>Kakeibo</title>
+    <script>
+      (function () {
+        var path = location.pathname;
+        if (/\/web\/?$/.test(path) && path.charAt(path.length - 1) !== "/") {
+          location.replace(path + "/" + location.search + location.hash);
+          return;
+        }
+        var reveal = function () {
+          var note = document.getElementById("boot-status");
+          if (note) { note.hidden = false; }
+        };
+        window.addEventListener("error", function (event) {
+          var target = event.target;
+          if (target && target.tagName === "SCRIPT") { reveal(); }
+        }, true);
+        window.addEventListener("DOMContentLoaded", function () {
+          window.setTimeout(function () {
+            var root = document.getElementById("root");
+            if (root && root.childElementCount === 0) { reveal(); }
+          }, 8000);
+        });
+      })();
+    </script>
+    <style>
+      #boot-status { max-width: 44rem; margin: 14vh auto 0; padding: 0 24px; font: 400 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #2F3931; }
+      #boot-status[hidden] { display: none; }
+      #boot-status p { margin: 0 0 10px; }
+      #boot-status a { color: #4F6A55; text-decoration: underline; }
+    </style>
+    <script type="module" crossorigin src="./assets/index-DrVQPWOd.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-psjODNx3.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="boot-status" role="status" hidden>
+      <p><b>Kakeibo could not start in this browser.</b></p>
+      <p>Reload the web app from <a href="./index.html">this page</a>. If you opened the file directly from your disk, use the <b>Open web app</b> link on the Kakeibo site instead of the file path.</p>
+      <p>If it still does not load, try a current version of Chrome, Firefox, Safari or Edge with JavaScript enabled.</p>
+    </div>
+  </body>
+</html>

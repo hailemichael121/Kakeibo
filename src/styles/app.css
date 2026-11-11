@@ -393,6 +393,13 @@ html[data-theme="dark"] .panel { border-color: rgba(255,255,255,.025); }
 .add-category { margin-top: 11px; }
 .data-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 9px; padding-top: 14px; }
 .data-actions > * { width: 100%; min-width: 0; }
+.backup-paste { display: grid; gap: 9px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.backup-paste label { color: var(--muted); font-size: 11px; font-weight: 600; }
+.backup-paste textarea { width: 100%; min-height: 112px; max-height: 280px; resize: vertical; padding: 11px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--base); color: var(--ink); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11px; line-height: 1.6; overflow: auto; }
+.backup-paste textarea::placeholder { color: var(--faint); }
+.backup-paste-help { margin: 0; color: var(--faint); font-size: 10px; line-height: 1.55; }
+.backup-paste-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: flex-start; }
+.backup-paste-actions .button-primary, .backup-paste-actions .button-quiet { width: auto; flex-shrink: 0; }
 .toggle-row { position: relative; display: flex; align-items: center; justify-content: space-between; padding-top: 14px; color: var(--muted); font-size: 11px; }
 .toggle-row input { position: absolute; right: 0; width: 38px; height: 22px; opacity: 0; z-index: 2; cursor: pointer; }
 .toggle-row i { width: 38px; height: 22px; border-radius: 15px; background: var(--line); box-shadow: var(--shadow-inset); transition: background .2s; }

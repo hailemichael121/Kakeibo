@@ -20,3 +20,5 @@ ios/App/build
 coverage
 release
 test-results
+!portfolio latest/files/downloads/
+!portfolio latest/files/downloads/*.apk

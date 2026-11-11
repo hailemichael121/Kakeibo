@@ -40,6 +40,7 @@
       <a href="story.html">The Story</a>
       <a href="practice.html">The Practice</a>
       <a href="index.html#app">The Application</a>
+      <a href="downloads.html">Downloads</a>
       <a class="get" href="index.html#get" data-dl-nav>Get Kakeibo</a>
     </nav>
   </div>
@@ -47,6 +48,22 @@
 
 <main id="main" class="wrap" tabindex="-1">
   <section class="hero" aria-labelledby="hero-title">
+    <svg class="hero-watermark" viewBox="0 0 520 420" aria-hidden="true" focusable="false">
+      <ellipse class="wash" cx="260" cy="330" rx="210" ry="60"/>
+      <circle cx="404" cy="88" r="34"/>
+      <path d="M60 92q18-12 36 0t36 0M420 176q16-11 32 0t32 0"/>
+      <path d="M260 32v48M236 80h48"/>
+      <path d="M170 112q90-30 180 0M186 112h148M200 128h120"/>
+      <path d="M150 154q110-36 220 0M170 154h180M186 170h148"/>
+      <path d="M128 198q132-42 264 0M150 198h220M168 214h184"/>
+      <path d="M106 244q154-48 308 0M130 244h260M150 260h220"/>
+      <path d="M82 292q178-54 356 0M108 292h304M130 308h260"/>
+      <path d="M100 344h320M80 358h360M60 372h400M40 386h440"/>
+      <path d="M220 154v44M300 154v44M200 198v46M320 198v46M180 244v48M340 244v48M160 292v52M360 292v52"/>
+      <path d="M240 308v38h40v-38M246 346v22M274 346v22M200 344v-22M320 344v-22M260 128v48M260 198v46M260 260v48"/>
+      <path d="M84 338q28-2 42-18h24q16 16 44 18M76 340v24M194 340v24M76 364h118"/>
+      <path d="M436 338q-28-2-42-18h-24q-16 16-44 18M444 340v24M326 340v24M326 364h118"/>
+    </svg>
     <div class="hero-copy" data-reveal>
       <p class="eyebrow">Kakeibo · <span lang="ja">家計簿</span> · a household ledger</p>
       <h1 id="hero-title">Money, with <em>room to breathe.</em></h1>
@@ -55,7 +72,7 @@
         <a class="btn" href="#get" data-dl-hero>Get Kakeibo</a>
         <a class="text-link" href="practice.html">How the practice works →</a>
       </div>
-      <p class="hero-meta"><span>Offline-first</span><span>No account</span><span>Android &amp; Linux</span></p>
+      <p class="hero-meta"><span>Offline-first</span><span>No account</span><span>Android, Linux &amp; Windows</span></p>
     </div>
     <div class="hero-visual" data-reveal>
       <svg class="enso" viewBox="0 0 600 600" aria-hidden="true">
@@ -264,7 +281,13 @@
             <h3>Kakeibo for Android</h3>
             <p>Direct APK · 8.2 MB · version 1.0.0</p>
           </div>
-          <a class="dl-link" href="../../release/Kakeibo.apk" download>Download APK <span aria-hidden="true">↓</span></a>
+          <div class="dl-side">
+            <a class="dl-link" href="downloads/Kakeibo.apk" download>Download APK <span aria-hidden="true">↓</span></a>
+            <button class="dl-help-toggle" type="button" aria-expanded="false" data-dl-help="android">
+              <span>How to install</span>
+              <span class="dl-help-chevron" aria-hidden="true">▾</span>
+            </button>
+          </div>
         </li>
         <li class="dl-option" data-platform="linux">
           <div class="dl-copy">
@@ -272,7 +295,55 @@
             <h3>Kakeibo for Linux</h3>
             <p>AppImage · 94.5 MB · version 1.0.0</p>
           </div>
-          <a class="dl-link" href="../../release/Kakeibo-1.0.0.AppImage" download>Download AppImage <span aria-hidden="true">↓</span></a>
+          <div class="dl-side">
+            <a class="dl-link" href="downloads/Kakeibo-1.0.0.AppImage" download>Download AppImage <span aria-hidden="true">↓</span></a>
+            <button class="dl-help-toggle" type="button" aria-expanded="false" data-dl-help="linux">
+              <span>How to install</span>
+              <span class="dl-help-chevron" aria-hidden="true">▾</span>
+            </button>
+          </div>
+        </li>
+        <li class="dl-option" data-platform="linux-deb">
+          <div class="dl-copy">
+            <span class="dl-kicker">Linux desktop</span>
+            <h3>Kakeibo for Linux</h3>
+            <p>Debian package · 94.7 MB · version 1.0.0</p>
+          </div>
+          <div class="dl-side">
+            <a class="dl-link" href="downloads/kakeibo_1.0.0_amd64.deb" download>Download .deb <span aria-hidden="true">↓</span></a>
+            <button class="dl-help-toggle" type="button" aria-expanded="false" data-dl-help="linux-deb">
+              <span>How to install</span>
+              <span class="dl-help-chevron" aria-hidden="true">▾</span>
+            </button>
+          </div>
+        </li>
+        <li class="dl-option" data-platform="windows">
+          <div class="dl-copy">
+            <span class="dl-kicker">Windows</span>
+            <h3>Kakeibo for Windows</h3>
+            <p>Installer · 99.9 MB · version 1.0.0</p>
+          </div>
+          <div class="dl-side">
+            <a class="dl-link" href="downloads/Kakeibo-Setup-1.0.0.exe" download>Download installer <span aria-hidden="true">↓</span></a>
+            <button class="dl-help-toggle" type="button" aria-expanded="false" data-dl-help="windows">
+              <span>How to install</span>
+              <span class="dl-help-chevron" aria-hidden="true">▾</span>
+            </button>
+          </div>
+        </li>
+        <li class="dl-option" data-platform="macos">
+          <div class="dl-copy">
+            <span class="dl-kicker">macOS</span>
+            <h3>Kakeibo for Mac</h3>
+            <p>Disk image · not published yet</p>
+          </div>
+          <div class="dl-side">
+            <span class="dl-link dl-link--soon">Coming soon</span>
+            <button class="dl-help-toggle" type="button" aria-expanded="false" data-dl-help="macos">
+              <span>How to install</span>
+              <span class="dl-help-chevron" aria-hidden="true">▾</span>
+            </button>
+          </div>
         </li>
         <li class="dl-option" data-platform="web">
           <div class="dl-copy">
@@ -280,16 +351,23 @@
             <h3>Open Kakeibo in your browser</h3>
             <p>No install · opens in your browser</p>
           </div>
-          <a class="dl-link" href="../../dist/index.html">Open web app <span aria-hidden="true">↗</span></a>
+          <div class="dl-side">
+            <a class="dl-link" href="./web/index.html">Open web app <span aria-hidden="true">↗</span></a>
+            <button class="dl-help-toggle" type="button" aria-expanded="false" data-dl-help="web">
+              <span>How it works</span>
+              <span class="dl-help-chevron" aria-hidden="true">▾</span>
+            </button>
+          </div>
         </li>
       </ul>
+      <div class="dl-help-panel" id="dl-help-panel" aria-hidden="true" hidden></div>
       <div class="dl-other" id="dl-other" hidden>
         <h3>Other ways to get Kakeibo</h3>
         <ul class="dl-alt" id="dl-alt"></ul>
       </div>
-      <p class="dl-help" id="dl-help" hidden></p>
-      <noscript><p class="dl-noscript">Choose the version that matches your device.</p></noscript>
-      <p class="dl-foot">Version 1.0.0 · Native builds for Android and Linux · Web app everywhere else.</p>
+      <noscript><p class="dl-noscript">Choose the version that matches your device. Installation notes for each build appear here once the page has loaded.</p></noscript>
+      <p class="dl-manifest"><b>Every published build has a checksum.</b> The <a href="downloads/SHA256SUMS" download>SHA256SUMS</a> manifest lists a SHA-256 fingerprint for each downloadable file — the Android APK, the Windows installer, the Linux AppImage and the Debian package. Compare it after downloading with the steps under <b>How to install</b>; the macOS build joins the manifest when it is published. <a href="downloads.html">See all downloads and checksums →</a></p>
+      <p class="dl-foot">Version 1.0.0 · Native builds for Android, Linux, Windows and macOS · Web app everywhere else.</p>
     </div>
   </section>
 </main>
@@ -309,6 +387,7 @@
           <a href="story.html">The Story</a>
           <a href="practice.html">The Practice</a>
           <a href="index.html#app">The Application</a>
+          <a href="downloads.html">Downloads</a>
           <a href="index.html#get">Get Kakeibo</a>
         </nav>
         <div class="footer-meta">

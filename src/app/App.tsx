@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs'
 import { jsPDF } from 'jspdf'
 import {
   ArrowDownToLine, ArrowLeft, ArrowUpFromLine, BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight,
-  CircleHelp, Clock3, Coffee, Download, FileSpreadsheet, Heart, House, Info,
+  CircleHelp, ClipboardPaste, Clock3, Coffee, Download, FileSpreadsheet, Heart, House, Info,
   MoreHorizontal, Pencil, Plus, RefreshCw, Search, SettingsIcon, ShoppingBag, Smartphone, Sun, Trash2, Umbrella, Wallet, X,
    Home, BookOpen as BookOpenIcon, BarChart3 as BarChartIcon, Clock3 as ClockIcon, Heart as HeartIcon
 } from 'lucide-react'
@@ -328,7 +328,7 @@ export function App() {
         {screen === 'Insights' && <InsightsScreen expenses={expenses} budget={budget} categories={activeCategories} currency={settings.currency} previousSpent={previousSpent} />}
         {screen === 'History' && <HistoryScreen expenses={expenses} categories={activeCategories} currency={settings.currency} search={search} onSearch={setSearch} filter={filterCategory} onFilter={setFilterCategory} onEdit={(e) => { setEditing(e); setExpenseOpen(true) }} onDelete={handleDelete} onExport={() => void exportExcel(expenses, settings.currency, month, notify)} onPdf={() => void exportPdf(expenses, settings.currency, month, notify)} onImport={(rows) => void importExpenses(rows, settings, refresh, notify)} />}
         {screen === 'Journal' && <JournalScreen onChanged={refresh} notify={notify} />}
-        {screen === 'Settings' && <SettingsScreen settings={settings} plan={plan} onSave={handleSaveSettings} onPlanSave={async (values) => { await savePlan({ ...values, id: month }); await refresh(); notify('Monthly plan saved'); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onDemoChange={async (enabled) => { await toggleDemo(enabled, settings, handleSaveSettings, month); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onExport={() => void exportBackup(notify)} onImport={(file) => void importBackup(file, refresh, notify)} onAudit={() => setScreen('Audit')} onSync={() => setScreen('Sync')} onAbout={() => setScreen('About')} onFactoryReset={handleFactoryReset} onAddWidget={canAddHomeWidget() ? () => void handleAddWidget() : undefined} />}
+        {screen === 'Settings' && <SettingsScreen settings={settings} plan={plan} onSave={handleSaveSettings} onPlanSave={async (values) => { await savePlan({ ...values, id: month }); await refresh(); notify('Monthly plan saved'); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onDemoChange={async (enabled) => { await toggleDemo(enabled, settings, handleSaveSettings, month); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onExport={() => void exportBackup(notify)} onImport={(source) => importBackup(source, refresh, notify)} onAudit={() => setScreen('Audit')} onSync={() => setScreen('Sync')} onAbout={() => setScreen('About')} onFactoryReset={handleFactoryReset} onAddWidget={canAddHomeWidget() ? () => void handleAddWidget() : undefined} />}
         {screen === 'Ritual' && <RitualScreen step={ritualStep} onStep={setRitualStep} month={month} plan={plan} reflection={reflection} budget={budget} expenses={expenses} settings={settings} onPlanSaved={async (values) => { await savePlan({ ...values, id: month }); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onReflected={async (chips, note) => { await saveReflection({ id: month, chips, note }); await refresh(); notify('Reflection saved') }} />}
         {screen === 'Audit' && <AuditScreen logs={audit} search={search} onSearch={setSearch} />}
         {screen === 'Sync' && <SyncScreen onBack={() => setScreen('Settings')} onMerged={refresh} notify={notify} />}
@@ -812,9 +812,9 @@ function ImportPreviewDialog({ preview, categories, currency, onCancel, onConfir
         <div><span>Date range</span><b>{dateRange}</b></div>
         <div><span>Categories</span><b>{detectedCategories.join(', ') || 'None'}</b></div>
       </div>
-      {preview.pending.length > 0 && <div className="import-attention">
-        <b>{preview.pending.length} {preview.pending.length === 1 ? 'record needs' : 'records need'} a period</b>
-        <p>These records use day numbers. Choose the salary cycle that contains them.</p>
+      {(preview.pending.length > 0 || preview.periodStart || preview.periodEnd) && <div className="import-attention">
+        <b>{preview.pending.length > 0 ? `${preview.pending.length} ${preview.pending.length === 1 ? 'record needs' : 'records need'} a period` : 'Import period'}</b>
+        <p>{preview.pending.length > 0 ? 'These records use day numbers. Choose the salary cycle that contains them.' : 'These dates were resolved from the selected period.'}</p>
         <div className="import-period-grid">
           <label>Period start<input type="date" value={preview.periodStart ?? ''} onChange={(e) => onPeriodChange(e.target.value, preview.periodEnd ?? '')} /></label>
           <label>Period end<input type="date" value={preview.periodEnd ?? ''} onChange={(e) => onPeriodChange(preview.periodStart ?? '', e.target.value)} /></label>
@@ -876,7 +876,7 @@ function RitualScreen({ step, onStep, month, plan, reflection, budget, expenses,
 }
 
 function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onExport, onImport, onAudit, onSync, onAbout, onFactoryReset, onAddWidget }: {
-  settings: AppSettings; plan?: MonthPlan; onSave: (patch: Partial<AppSettings>) => Promise<void>; onPlanSave: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onDemoChange: (enabled: boolean) => void; onExport: () => void; onImport: (file: File) => void; onAudit: () => void; onSync: () => void
+  settings: AppSettings; plan?: MonthPlan; onSave: (patch: Partial<AppSettings>) => Promise<void>; onPlanSave: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onDemoChange: (enabled: boolean) => void; onExport: () => void; onImport: (source: File | string) => Promise<boolean>; onAudit: () => void; onSync: () => void
   onAbout: () => void
   onFactoryReset: () => Promise<void>
   onAddWidget?: () => void
@@ -897,6 +897,16 @@ function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onEx
   const [reminderNightTime, setReminderNightTime] = useState(settings.reminderNightTime ?? '21:00')
   const [reminderWeeklyEnabled, setReminderWeeklyEnabled] = useState(settings.reminderWeeklyEnabled ?? true)
   const [reminderWeeklyDay, setReminderWeeklyDay] = useState(String(settings.reminderWeeklyDay ?? 0))
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [backupText, setBackupText] = useState('')
+  const [restoringBackup, setRestoringBackup] = useState(false)
+  async function restorePastedBackup() {
+    if (!backupText.trim() || restoringBackup) return
+    setRestoringBackup(true)
+    try {
+      if (await onImport(backupText)) { setBackupText(''); setPasteOpen(false) }
+    } finally { setRestoringBackup(false) }
+  }
   useEffect(() => { setCategories(settings.categories) }, [settings.categories])
   useEffect(() => { setRemindersEnabled(settings.remindersEnabled ?? true); setReminderMiddayTime(settings.reminderMiddayTime ?? '12:00'); setReminderNightTime(settings.reminderNightTime ?? '21:00'); setReminderWeeklyEnabled(settings.reminderWeeklyEnabled ?? true); setReminderWeeklyDay(String(settings.reminderWeeklyDay ?? 0)); }, [settings]);
   const saveCategoryList = async (next: Category[]) => {
@@ -945,7 +955,7 @@ function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onEx
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('feel')}><span className="settings-icon"><Sun size={18} /></span><div><h2>Appearance</h2><small>Quiet, comfortable, and yours.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.feel ? 'open' : ''}`} /></header>{settingsOpen.feel && <><div className="settings-row"><span>Theme</span><Select value={settings.theme} onChange={(v) => void onSave({ theme: v as AppSettings['theme'] })} options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'auto', label: 'Match device' }]} /></div><div className="settings-row"><span>Calendar</span><Select ariaLabel="Calendar system" value={calendarPreference.system} onChange={(v) => setCalendarPreference({ system: v as CalendarSystem })} options={[{ value: 'gregorian', label: 'Gregorian' }, { value: 'ethiopian', label: 'Ethiopian' }]} /></div>{calendarPreference.system === 'ethiopian' && <div className="settings-row"><span>Ethiopian day names</span><Select ariaLabel="Ethiopian day names" value={calendarPreference.language} onChange={(v) => setCalendarPreference({ language: v as CalendarLanguage })} options={[{ value: 'en', label: 'English' }, { value: 'am', label: 'አማርኛ' }]} /></div>}</>}</section>
     {onAddWidget && <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('widget')}><span className="settings-icon"><Plus size={18} /></span><div><h2>Home screen widget</h2><small>See what is left without opening Kakeibo.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.widget ? 'open' : ''}`} /></header>{settingsOpen.widget && <div className="settings-row"><span>Add the spendable-left widget to your home screen</span><button className="button-quiet" onClick={onAddWidget}><Plus size={16} /> Add widget</button></div>}</section>}
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('reminders')}><span className="settings-icon"><Clock3 size={18} /></span><div><h2>Reminders</h2><small>Gentle nudges to register your spending.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.reminders ? 'open' : ''}`} /></header>{settingsOpen.reminders && <><div className="settings-row"><span>Enable reminders</span><Toggle checked={remindersEnabled} onChange={(v) => { setRemindersEnabled(v); void onSave({ remindersEnabled: v }) }} /></div><div className="settings-row"><span>Midday reminder</span><TimePicker value={reminderMiddayTime} onChange={(v) => { setReminderMiddayTime(v); void onSave({ reminderMiddayTime: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Night reminder</span><TimePicker value={reminderNightTime} onChange={(v) => { setReminderNightTime(v); void onSave({ reminderNightTime: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Weekly report</span><Toggle checked={reminderWeeklyEnabled} onChange={(v) => { setReminderWeeklyEnabled(v); void onSave({ reminderWeeklyEnabled: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Weekly report day</span><Select value={reminderWeeklyDay} onChange={(v) => { setReminderWeeklyDay(v); void onSave({ reminderWeeklyDay: Number(v) }) }} disabled={!remindersEnabled || !reminderWeeklyEnabled} options={[{ value: '0', label: 'Sunday' }, { value: '1', label: 'Monday' }, { value: '2', label: 'Tuesday' }, { value: '3', label: 'Wednesday' }, { value: '4', label: 'Thursday' }, { value: '5', label: 'Friday' }, { value: '6', label: 'Saturday' }]} /></div></>}</section>
-    <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('data')}><span className="settings-icon"><ArrowDownToLine size={18} /></span><div><h2>Your data</h2><small>Keep a copy or move it with you.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.data ? 'open' : ''}`} /></header>      {settingsOpen.data && <><div className="data-actions"><button className="button-quiet" onClick={onExport}><Download size={16} /> Backup data</button><label className="button-quiet file-import"><ArrowUpFromLine size={16} /> Restore backup<input type="file" accept=".json" onChange={(e) => { const file = e.target.files?.[0]; if (file) onImport(file); e.currentTarget.value = '' }} /></label><button className="button-quiet" onClick={onSync}><RefreshCw size={16} /> Sync devices</button><button className="button-quiet" onClick={onAudit}><Clock3 size={16} /> View audit log</button></div><div className="factory-reset-row"><span><b>Factory reset</b><small>Erase everything on this device and start fresh.</small></span><button className="button-danger-quiet" onClick={() => void onFactoryReset()}><Trash2 size={15} /> Factory reset</button></div></>}</section>
+    <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('data')}><span className="settings-icon"><ArrowDownToLine size={18} /></span><div><h2>Your data</h2><small>Keep a copy or move it with you.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.data ? 'open' : ''}`} /></header>      {settingsOpen.data && <><div className="data-actions"><button className="button-quiet" onClick={onExport}><Download size={16} /> Backup data</button><label className="button-quiet file-import"><ArrowUpFromLine size={16} /> Restore backup<input type="file" accept=".json" onChange={(e) => { const file = e.target.files?.[0]; if (file) void onImport(file); e.currentTarget.value = '' }} /></label><button className="button-quiet" type="button" aria-expanded={pasteOpen} aria-controls="backup-paste" onClick={() => setPasteOpen((open) => !open)}>{pasteOpen ? <X size={16} /> : <ClipboardPaste size={16} />} Paste backup</button><button className="button-quiet" onClick={onSync}><RefreshCw size={16} /> Sync devices</button><button className="button-quiet" onClick={onAudit}><Clock3 size={16} /> View audit log</button></div>{pasteOpen && <div className="backup-paste" id="backup-paste"><label htmlFor="backup-json">Paste the JSON from a backup file</label><textarea id="backup-json" rows={6} value={backupText} onChange={(event) => setBackupText(event.target.value)} placeholder='{"version": 1, "tables": { … }}' spellCheck={false} aria-describedby="backup-paste-help" /><p className="backup-paste-help" id="backup-paste-help">Paste the whole contents of a Kakeibo backup (.json) file. Current data is replaced after you confirm.</p><div className="backup-paste-actions"><button className="button-primary" type="button" disabled={!backupText.trim() || restoringBackup} onClick={() => void restorePastedBackup()}>{restoringBackup ? 'Restoring…' : 'Restore pasted backup'}</button><button className="button-quiet" type="button" onClick={() => { setPasteOpen(false); setBackupText('') }}>Cancel</button></div></div>}<div className="factory-reset-row"><span><b>Factory reset</b><small>Erase everything on this device and start fresh.</small></span><button className="button-danger-quiet" onClick={() => void onFactoryReset()}><Trash2 size={15} /> Factory reset</button></div></>}</section>
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('about')}><span className="settings-icon"><Info size={18} /></span><div><h2>About Kakeibo</h2><small>Its roots, purpose, and categories</small></div><ChevronRight size={18} className={`chev ${settingsOpen.about ? 'open' : ''}`} /></header>{settingsOpen.about && <button className="settings-link" onClick={onAbout}><span><b>Explore Kakeibo</b><small>Open the illustrated guide and monthly practice.</small></span><ChevronRight size={18} /></button>}</section>
     <section className="panel settings-group demo-setting"><header className="settings-header-clickable" onClick={() => toggle('demo')}><span className="settings-icon"><CircleHelp size={18} /></span><div><h2>Trying things out?</h2><small>Demo data stays local and is easy to remove.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.demo ? 'open' : ''}`} /></header>{settingsOpen.demo && <div className="settings-row"><span>Seed sample expenses</span><Toggle checked={settings.demoEnabled} onChange={(v) => onDemoChange(v)} /></div>}</section>
     <p className="settings-note">No account. No cloud. Your financial life stays on this device.</p>
@@ -1220,9 +1230,11 @@ async function importExpenses(rows: ImportRow[], settings: AppSettings, refresh:
       }
     })
     await refresh()
-    const parts: string[] = []
-    if (imported) parts.push(`${imported} expense${imported === 1 ? '' : 's'} imported`)
-    else parts.push('No new expenses imported')
+    if (!imported && !invalid) {
+      notify(duplicates ? `No new expenses · ${duplicates} duplicate${duplicates === 1 ? '' : 's'} skipped` : 'No new expenses imported')
+      return
+    }
+    const parts: string[] = [imported ? `${imported} expense${imported === 1 ? '' : 's'} imported` : 'No new expenses imported']
     if (duplicates) parts.push(`${duplicates} duplicate${duplicates === 1 ? '' : 's'} skipped`)
     if (invalid) parts.push(`${invalid} row${invalid === 1 ? '' : 's'} skipped`)
     notify(parts.join(' · '))
@@ -1237,9 +1249,11 @@ async function exportBackup(notify: (text: string) => void) {
   } catch (error) { notify(error instanceof Error ? error.message : 'Could not create backup') }
 }
 
-async function importBackup(file: File, refresh: () => Promise<void>, notify: (text: string) => void) {
+async function importBackup(source: File | string, refresh: () => Promise<void>, notify: (text: string) => void): Promise<boolean> {
   try {
-    const payload = JSON.parse(await file.text()) as { version?: number; tables?: Record<string, unknown[]> }
+    const text = typeof source === 'string' ? source : await source.text()
+    let payload: { version?: number; tables?: Record<string, unknown[]> }
+    try { payload = JSON.parse(text) as { version?: number; tables?: Record<string, unknown[]> } } catch { throw new Error('That is not valid JSON. Paste the whole contents of a Kakeibo backup.') }
     if (payload.version !== 1 || !payload.tables || !Array.isArray(payload.tables.expenses)) throw new Error('This is not a Kakeibo backup.')
     const confirmed = await confirmDialog({
       title: 'Restore this backup?',
@@ -1248,7 +1262,7 @@ async function importBackup(file: File, refresh: () => Promise<void>, notify: (t
       confirmLabel: 'Restore backup',
       tone: 'danger',
     })
-    if (!confirmed) return
+    if (!confirmed) return false
     await db.transaction('rw', [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit], async () => {
       for (const table of [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit]) await table.clear()
       for (const name of ['expenses', 'plans', 'reflections', 'journals', 'settings', 'audit']) {
@@ -1258,7 +1272,8 @@ async function importBackup(file: File, refresh: () => Promise<void>, notify: (t
     })
     await refresh()
     notify('Backup restored')
-  } catch (error) { notify(error instanceof Error ? error.message : 'Could not restore backup') }
+    return true
+  } catch (error) { notify(error instanceof Error ? error.message : 'Could not restore backup'); return false }
 }
 
 async function toggleDemo(enabled: boolean, settings: AppSettings, onSave: (patch: Partial<AppSettings>) => Promise<void>, month: string) {

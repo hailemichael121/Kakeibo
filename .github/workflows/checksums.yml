@@ -1,0 +1,26 @@
+name: Checksums
+
+on:
+  push:
+    paths:
+      - "portfolio latest/files/**"
+      - "release/SHA256SUMS"
+      - "scripts/release-checksums.mjs"
+      - ".github/workflows/checksums.yml"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify SHA256SUMS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check manifest, download links and embedded hashes
+        run: npm run checksums:check
