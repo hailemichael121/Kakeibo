@@ -8,9 +8,12 @@ export interface Expense {
   id: string
   amount: number
   category: CategoryName
-  pause: PauseTag
+  pause: PauseTag | null
   date: string
   note?: string
+  from?: string | null
+  to?: string | null
+  peopleCount?: number | null
   createdAt: string
   updatedAt: string
   deletedAt: string | null

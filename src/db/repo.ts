@@ -23,13 +23,33 @@ export async function recordAudit(entry: Omit<AuditEntry, 'id' | 'timestamp'>): 
   await db.audit.add({ ...entry, id: uid(), timestamp: new Date().toISOString() })
 }
 
-export async function saveExpense(input: Pick<Expense, 'amount' | 'category' | 'pause' | 'date' | 'note'> & { demo?: boolean }, id?: string): Promise<Expense> {
+export type SaveExpenseInput = Pick<Expense, 'amount' | 'category' | 'date'> & Partial<Pick<Expense, 'pause' | 'note' | 'from' | 'to' | 'peopleCount'>> & { demo?: boolean }
+
+function cleanText(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed || null
+}
+
+function cleanPeople(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return null
+  return value
+}
+
+export async function saveExpense(input: SaveExpenseInput, id?: string): Promise<Expense> {
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error('Enter an amount greater than zero.')
   if (!input.category) throw new Error('Choose a category.')
   const now = new Date().toISOString()
   const existing = id ? await db.expenses.get(id) : undefined
+  const note = input.note === undefined ? existing?.note : cleanText(input.note) ?? undefined
+  const pause = input.pause === undefined ? existing?.pause ?? null : input.pause
   const expense: Expense = {
     ...input,
+    pause,
+    note,
+    from: input.from === undefined ? existing?.from ?? null : cleanText(input.from),
+    to: input.to === undefined ? existing?.to ?? null : cleanText(input.to),
+    peopleCount: input.peopleCount === undefined ? existing?.peopleCount ?? null : cleanPeople(input.peopleCount),
     id: id ?? uid(),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,

@@ -1,0 +1,41 @@
+{
+  "expenses": [
+    {
+      "amount": 180,
+      "category": "Survival",
+      "pause": "Needed it",
+      "date": "2026-11-01",
+      "note": "Taxi from work",
+      "from": "Work",
+      "to": "Home",
+      "peopleCount": 1
+    },
+    {
+      "amount": 260,
+      "category": "Survival",
+      "pause": "Needed it",
+      "date": "2026-11-02",
+      "note": "Shared transport",
+      "from": "Megenagna",
+      "to": "Bole",
+      "peopleCount": 4
+    },
+    {
+      "amount": 540,
+      "category": "Optional",
+      "pause": "Wanted it",
+      "date": "2026-11-03",
+      "note": "Family outing",
+      "from": "Home",
+      "to": "Restaurant",
+      "peopleCount": 5
+    },
+    {
+      "amount": 95,
+      "category": "Culture",
+      "pause": "Wanted it",
+      "date": "2026-11-04",
+      "note": "Bookshop"
+    }
+  ]
+}

@@ -51,12 +51,15 @@ function isExpense(value: unknown): value is Expense {
     && isNonEmptyString(value.id)
     && isMoney(value.amount)
     && isNonEmptyString(value.category)
-    && ['Needed it', 'Wanted it', 'Regret'].includes(String(value.pause))
+    && (value.pause === null || ['Needed it', 'Wanted it', 'Regret'].includes(String(value.pause)))
     && isNonEmptyString(value.date)
     && isNonEmptyString(value.createdAt)
     && isNonEmptyString(value.updatedAt)
     && (value.deletedAt === null || typeof value.deletedAt === 'string')
     && (value.note === undefined || typeof value.note === 'string')
+    && (value.from === undefined || value.from === null || typeof value.from === 'string')
+    && (value.to === undefined || value.to === null || typeof value.to === 'string')
+    && (value.peopleCount === undefined || value.peopleCount === null || (typeof value.peopleCount === 'number' && Number.isInteger(value.peopleCount) && value.peopleCount > 0))
 }
 
 function isPlan(value: unknown): value is MonthPlan {

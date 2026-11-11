@@ -10,7 +10,7 @@ A calm, offline-first home budget inspired by the Japanese practice of mindful m
 - **Welcome and About:** a three-step setup introduces Kakeibo and lets someone joining mid-month enter their already-spent total. Settings links to a dedicated screen with an original, illustrated Kakeibo overview, category guide, monthly prompts, and a link to the source reading.
 - **Monthly ritual:** Start (income, fixed costs, optional savings target), Track, End, and Reflect (chips with an optional note).
 - **Insights:** category donut, weekly bars, Wanted vs Needed, and current/previous month totals.
-- **History:** date-grouped list with category filters, search, swipe-to-edit/delete on touch screens, undo after delete, Excel/PDF export, and preview-before-import for Excel/CSV.
+- **History:** date-grouped list with category filters, search, swipe-to-edit/delete on touch screens, undo after delete, Excel/PDF export, and preview-before-import for JSON, Excel, and CSV.
 - **Journal:** a searchable, local-only writing space for money reflections or anything else. Saved notes open read-only, with explicit edit/delete actions and a disabled AI placeholder for future work. Select words while writing to apply a soft highlight; dates, moods, tags, and optional prompts are available. On mobile, the list, reader, and editor are separate views. Journal entries travel with JSON backups and device sync.
 - **Settings:** editable categories, income and fixed costs, optional savings target, ETB by default, month start day, theme, language, local backup/restore, device sync, the Kakeibo guide, and a demo-data toggle.
 - **Audit log:** searchable, on-device record of expense, plan, reflection, journal, and settings changes. Journal text itself is kept out of journal audit details.
@@ -89,9 +89,9 @@ The package metadata uses `https://example.com/kakeibo` as a placeholder homepag
 ## Data, import, and export
 
 - All budgeting data is held in local IndexedDB. It remains usable offline, without registration.
-- **Excel export** writes a monthly choices sheet. **PDF export** creates a monthly summary with plan, category totals, and recent choices.
-- Excel and CSV imports require `Amount` and `Category` headers. `Date` and `Pause` are optional. The app validates rows and shows a preview before anything is added.
-- **Settings → Backup data** writes a JSON backup; **Restore backup** asks for confirmation before replacing local data.
+- **Excel export** writes a monthly choices sheet, including optional note, from, to, and people details. **PDF export** creates a monthly summary with plan, category totals, and recent choices.
+- Excel and CSV imports require `Amount` and `Category` headers. `Date`, `Pause`, `Note`, `From`, `To`, and `People` are optional. JSON imports accept an array, an `{ "expenses": [...] }` object, or a Kakeibo backup. The app validates amounts and dates, preserves optional details, skips exact duplicates, and shows a preview before anything is added. A reusable sample dataset lives at `sample-data/expenses.seed.json`; choose it from **History → Import**.
+- **Settings → Backup data** writes a JSON backup; **Restore backup** asks for confirmation before replacing local data. Backups preserve optional expense details.
 - Native devices open the system share sheet. Electron opens the Save dialog. Browsers share files where supported, otherwise they download.
 - Every create, edit, delete, restore, plan, reflection, and settings update adds a timestamped local audit entry. Deleted expenses are soft-deleted, excluded from totals, and can be restored immediately from the undo notice.
 

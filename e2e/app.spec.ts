@@ -1,3 +1,4 @@
+import { readFile, writeFile } from 'node:fs/promises'
 import { expect, test, type Page } from 'playwright/test'
 
 declare global {
@@ -21,7 +22,22 @@ async function completeOnboarding(page: Page) {
   await expect(page.locator('.onboarding-card')).toHaveCount(0)
 }
 
-async function addExpense(page: Page, amount = '12.5') {
+async function seedImportFile(): Promise<string> {
+  const source = JSON.parse(await readFile('sample-data/expenses.seed.json', 'utf8')) as { expenses: Array<Record<string, unknown>> }
+  const today = new Date()
+  source.expenses = source.expenses.map((expense, index) => {
+    const date = new Date(today.getFullYear(), today.getMonth(), Math.max(1, today.getDate() - index))
+    return {
+      ...expense,
+      date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+    }
+  })
+  const path = '/tmp/opencode/kakeibo-e2e-seed.json'
+  await writeFile(path, JSON.stringify(source))
+  return path
+}
+
+async function addExpense(page: Page, amount = '12.5', details?: { from: string; to: string; people: string }) {
   await page.locator('.sidebar-add').click()
   await expect(page.getByRole('dialog', { name: 'Add expense' })).toBeVisible()
   for (const key of amount) {
@@ -32,6 +48,13 @@ async function addExpense(page: Page, amount = '12.5') {
   await expect(page.getByRole('dialog', { name: 'Expense date' })).toBeVisible()
   await page.getByRole('dialog', { name: /date/i }).getByRole('button', { name: 'Today', exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Expense date' })).toHaveCount(0)
+  if (details) {
+    await page.getByRole('button', { name: 'Additional details' }).click()
+    await expect(page.locator('#expense-details')).toHaveClass(/open/)
+    await page.getByLabel('From', { exact: true }).fill(details.from)
+    await page.getByLabel('To', { exact: true }).fill(details.to)
+    await page.getByLabel('People', { exact: true }).fill(details.people)
+  }
   await page.getByRole('button', { name: 'Done' }).click()
   await expect(page.getByRole('status')).toContainText('Expense saved')
 }
@@ -59,6 +82,67 @@ test.describe('Kakeibo app', () => {
     await expect(page.locator('.recent-panel .expense-row').first()).toContainText('Optional')
   })
 
+  test('optional expense details persist through reload and edit', async ({ page }) => {
+    await completeOnboarding(page)
+    await addExpense(page, '260', { from: 'Megenagna', to: 'Bole', people: '4' })
+
+    const row = page.locator('.recent-panel .expense-row').first()
+    await expect(row).toContainText('Megenagna → Bole')
+    await expect(row).toContainText('4 people')
+
+    await page.reload()
+    await waitForApp(page)
+    const reloaded = page.locator('.recent-panel .expense-row').first()
+    await expect(reloaded).toContainText('4 people')
+    await reloaded.hover()
+    await reloaded.locator('button[title="Edit expense"]').click()
+    await expect(page.getByRole('dialog', { name: 'Add expense' })).toBeVisible()
+    await page.getByRole('button', { name: 'Additional details' }).click()
+    await expect(page.locator('#expense-details')).toHaveClass(/open/)
+    await expect(page.getByLabel('From', { exact: true })).toHaveValue('Megenagna')
+    await expect(page.getByLabel('To', { exact: true })).toHaveValue('Bole')
+    await expect(page.getByLabel('People', { exact: true })).toHaveValue('4')
+
+    await page.getByLabel('From', { exact: true }).fill('Office')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByRole('status')).toContainText('Expense updated')
+    await expect(page.locator('.recent-panel .expense-row').first()).toContainText('Office → Bole')
+  })
+
+  test('typing in optional details does not feed the amount keypad', async ({ page }) => {
+    await completeOnboarding(page)
+    await page.locator('.sidebar-add').click()
+    for (const key of '260') await page.getByRole('button', { name: key, exact: true }).click()
+    await page.getByRole('button', { name: 'Additional details' }).click()
+    const from = page.getByLabel('From', { exact: true })
+    await from.click()
+    await from.pressSequentially('Gate 4')
+    await expect(from).toHaveValue('Gate 4')
+    const people = page.getByLabel('People', { exact: true })
+    await people.click()
+    await people.pressSequentially('4')
+    await expect(people).toHaveValue('4')
+    await expect(page.locator('.amount-display strong')).toHaveText('260')
+  })
+
+  test('optional expense details stay usable on a phone-sized screen', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await completeOnboarding(page)
+    await page.locator('.mobile-floating-add').click()
+    await expect(page.getByRole('dialog', { name: 'Add expense' })).toBeVisible()
+    for (const key of '85') await page.getByRole('button', { name: key, exact: true }).click()
+    await page.locator('.category-chips button', { hasText: 'Optional' }).click()
+    await page.getByRole('button', { name: 'Additional details' }).click()
+    await expect(page.locator('#expense-details')).toHaveClass(/open/)
+    await page.getByLabel('From', { exact: true }).fill('Home')
+    await page.getByLabel('To', { exact: true }).fill('Market')
+    await page.getByLabel('People', { exact: true }).fill('2')
+    await page.getByRole('button', { name: 'Done' }).click()
+    await expect(page.getByRole('status')).toContainText('Expense saved')
+    await expect(page.locator('.recent-panel .expense-row').first()).toContainText('Home → Market')
+    await expect(page.locator('.recent-panel .expense-row').first()).toContainText('2 people')
+  })
+
   test('factory reset requires a custom confirmation and restores the first-run state', async ({ page }) => {
     await completeOnboarding(page)
     await addExpense(page)
@@ -80,6 +164,89 @@ test.describe('Kakeibo app', () => {
     await page.reload()
     await waitForApp(page)
     await expect(page.getByText('Welcome to Kakeibo')).toBeVisible()
+  })
+
+  test('JSON import preserves optional details and skips duplicates', async ({ page }) => {
+    await completeOnboarding(page)
+    await addExpense(page, '12.5')
+    await page.locator('.side-nav button', { hasText: 'History' }).click()
+    const input = page.locator('.history-actions input[type="file"]')
+    const preview = page.getByRole('dialog', { name: 'Review import' })
+    const seedPath = await seedImportFile()
+
+    await input.setInputFiles(seedPath)
+    await expect(preview).toBeVisible()
+    await expect(preview).toContainText('4 ready to import')
+    await preview.getByRole('button', { name: 'Import 4 expenses' }).click()
+    await expect(page.getByRole('status')).toContainText('4 expenses imported')
+    const shared = page.locator('.expense-row', { hasText: 'Shared transport' })
+    await expect(shared).toContainText('Megenagna → Bole')
+    await expect(shared).toContainText('4 people')
+    await expect(page.locator('.expense-row')).toHaveCount(5)
+
+    await input.setInputFiles(seedPath)
+    await expect(preview).toBeVisible()
+    await preview.getByRole('button', { name: 'Import 4 expenses' }).click()
+    await expect(page.getByRole('status')).toContainText('No new expenses · 4 duplicates skipped')
+    await expect(page.locator('.expense-row')).toHaveCount(5)
+  })
+
+  test('Excel export and import preserve optional expense details', async ({ page }) => {
+    await completeOnboarding(page)
+    await addExpense(page, '260', { from: 'Megenagna', to: 'Bole', people: '4' })
+    await page.locator('.side-nav button', { hasText: 'History' }).click()
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Excel' }).click()
+    const download = await downloadPromise
+    const exportPath = '/tmp/opencode/kakeibo-e2e-export.xlsx'
+    await download.saveAs(exportPath)
+
+    const row = page.locator('.expense-row').first()
+    await row.hover()
+    await row.locator('button[title="Delete expense"]').click()
+    await page.getByRole('alertdialog', { name: 'Delete this expense?' }).getByRole('button', { name: 'Delete expense', exact: true }).click()
+    await expect(page.getByRole('status')).toContainText('Expense deleted')
+
+    await page.locator('.history-actions input[type="file"]').setInputFiles(exportPath)
+    const preview = page.getByRole('dialog', { name: 'Review import' })
+    await expect(preview).toBeVisible()
+    await expect(preview).toContainText('1 ready to import')
+    await preview.getByRole('button', { name: 'Import 1 expense' }).click()
+    await expect(page.getByRole('status')).toContainText('1 expense imported')
+    const imported = page.locator('.expense-row').first()
+    await expect(imported).toContainText('Megenagna → Bole')
+    await expect(imported).toContainText('4 people')
+  })
+
+  test('backup and restore preserve optional expense details', async ({ page }) => {
+    await completeOnboarding(page)
+    await addExpense(page, '260', { from: 'Megenagna', to: 'Bole', people: '4' })
+    await page.locator('.side-nav button', { hasText: 'Settings' }).click()
+    await page.getByRole('heading', { name: 'Your data' }).click()
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Backup data' }).click()
+    const download = await downloadPromise
+    const backupPath = '/tmp/opencode/kakeibo-e2e-backup.json'
+    await download.saveAs(backupPath)
+
+    await page.locator('.side-nav button', { hasText: 'Home' }).click()
+    const row = page.locator('.recent-panel .expense-row').first()
+    await row.hover()
+    await row.locator('button[title="Delete expense"]').click()
+    await page.getByRole('alertdialog', { name: 'Delete this expense?' }).getByRole('button', { name: 'Delete expense', exact: true }).click()
+    await expect(page.getByRole('status')).toContainText('Expense deleted')
+
+    await page.locator('.side-nav button', { hasText: 'Settings' }).click()
+    await page.getByRole('heading', { name: 'Your data' }).click()
+    await page.locator('.data-actions input[type="file"]').setInputFiles(backupPath)
+    const restore = page.getByRole('alertdialog', { name: 'Restore this backup?' })
+    await expect(restore).toBeVisible()
+    await restore.getByRole('button', { name: 'Restore backup', exact: true }).click()
+    await expect(page.getByRole('status')).toContainText('Backup restored')
+    await page.locator('.side-nav button', { hasText: 'Home' }).click()
+    const restored = page.locator('.recent-panel .expense-row').first()
+    await expect(restored).toContainText('Megenagna → Bole')
+    await expect(restored).toContainText('4 people')
   })
 
   test('notification routes open the add form or the report screen', async ({ page }) => {

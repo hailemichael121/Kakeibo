@@ -1,7 +1,7 @@
 # Kakeibo project status
 
-**Last updated:** 2026-11-04  
-**Project root:** `/home/yihun/Desktop/Kakeibo`  
+**Last updated:** 2026-11-11
+**Project root:** `/home/yihun/Desktop/Kakeibo`
 **State:** Core web, Android build, and Linux desktop packaging are implemented and verified. Device-to-device sync is implemented; physical camera/network testing remains platform-dependent.
 
 ## Implemented
@@ -9,6 +9,8 @@
 - Responsive React/TypeScript application with offline-first Dexie/IndexedDB storage, mobile glass tabs, desktop sidebar, keyboard `N` shortcut, light/dark themes, and reduced-motion-friendly UI transitions.
 - Welcome/setup flow of at most three steps, with Kakeibo history and category guidance, optional savings target, and a starting-spend field when setting up after the configured month start.
 - Spendable budget calculations, category totals, expense keypad, one-tap pause tags, monthly ritual, insights, history, searchable audit log, backups, Excel/PDF export, and preview-before-import.
+- Optional expense context in a collapsed “Additional details” section: `from`, `to`, and positive-integer `peopleCount`. Values are nullable, backward-compatible, preserved through edits, reloads, Excel export/import, JSON import, backups, and device sync. Expense rows show a compact detail summary when present.
+- History import supports structured JSON (root array, `{ expenses: [...] }`, or Kakeibo backup expenses), validates amounts and dates, normalizes optional fields, skips exact duplicate rows, and reports duplicates in the result toast.
 - Settings for budget, categories, currency, month boundary, theme, language, demo data, and device sync; its clean About Kakeibo entry opens a dedicated screen with an illustrated guide, monthly practice, reflection prompts, and source link.
 - A searchable local-first Journal screen on mobile and desktop, with dated freeform notes, optional mood/tags/prompts, recently-deleted recovery, audit entries, and inclusion in backups and device sync. Saved notes open in a read-only reader with explicit edit/delete controls and a disabled AI placeholder; selection highlighting is stored with note text. Mobile uses separate list, reader, and editor views. Journal writing is not copied into audit details.
 - Branded header navigation on mobile and desktop, with decorative Japanese characters removed from the product UI. The selected Amharic navigation option remains available as a language setting.
@@ -26,14 +28,16 @@
 ## Validation completed
 
 - `npm run typecheck` passes.
-- Targeted ESLint passes for the journal, database, sync, and app files changed here. Full `npm run lint` currently reports three existing errors in `src/lib/widget.ts` (`no-explicit-any` twice and an unused catch variable); that unrelated widget code was left untouched.
-- `npm test` passes: 31 tests across budgets, calendar ranges/daily totals, amount parsing, sync validation/merge/undo, journal persistence/audit behavior, QR scanning, and LAN-link validation.
+- `npm run lint` passes.
+- `npm test` passes: 28 tests across optional expense persistence/import validation, budgets, calendar ranges/daily totals, amount parsing, sync validation/merge/undo, journal persistence/audit behavior, QR scanning, and LAN-link validation.
+- `npm run test:e2e` passes: 15 browser tests, including optional expense details on desktop/mobile, JSON import deduplication, Excel and backup export/import preservation, custom dialogs, date picker calendars, reminders, sync, and journal flows.
 - `npm run test:lan` passes: 3 desktop LAN transfer server tests.
 - `npm run build` passes.
 - `npm run cap:sync` and `npm run build:mobile && npm run android:assemble` pass; Gradle reports `BUILD SUCCESSFUL`.
 - `npm run electron` serves the UI and starts Electron; the Vite endpoint returned HTTP 200. The test process was stopped cleanly. The host emitted non-blocking GTK font and VA-API warnings.
 - `npm run desktop:build:linux` completes and creates the Linux AppImage and `.deb` packages in `release/`.
 - Browser check confirmed the welcome step, mid-month starting-spend field, optional savings step, home screen, device-sync screen, mobile logo/header, and calendar day selection/details. The supplied PNG matches the read-only source attachment byte-for-byte.
+- Browser checks confirmed the collapsed/expanded optional-details section at desktop (1280px) and phone widths (390px and 320px), with no horizontal overflow at 320px.
 - Browser checks at 320, 360, 390, and 400px verified onboarding step 3 buttons and the monthly spendable summary stay within the card. Home, Insights, History, Journal, Settings, Sync, Audit, About, and Ritual also showed no horizontal overflow at 320px; the five mobile tabs fit and the expense action floats above them without overlap.
 - Android plugins are synced and the APK builds, but no Android device/emulator was attached, so live camera scanning and device-to-device radio/network transfer could not be exercised here.
 - iOS dependencies/configuration are present, but the Xcode project, privacy strings, local-network/ATS policy, and runtime validation still require macOS/Xcode. See the iOS setup notes in the README; JSON file sync is available without direct local HTTP.

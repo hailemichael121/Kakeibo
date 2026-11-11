@@ -8,10 +8,11 @@ import {
    Home, BookOpen as BookOpenIcon, BarChart3 as BarChartIcon, Clock3 as ClockIcon, Heart as HeartIcon
 } from 'lucide-react'
 import { db, amountText, defaultSettings, monthKey, uid, type AppSettings, type AuditEntry, type Category, type Expense, type MonthPlan } from '@/db/db'
-import { ensureSettings, deleteExpense, recordAudit, resetAllData, restoreExpense, saveExpense, savePlan, saveReflection, saveSettings } from '@/db/repo'
+import { ensureSettings, deleteExpense, recordAudit, resetAllData, restoreExpense, saveExpense, savePlan, saveReflection, saveSettings, type SaveExpenseInput } from '@/db/repo'
 import { calculateBudget, categoryPercent } from '@/domain/budget'
 import { getBudgetCalendarDates, localDateKey, summarizeExpensesByLocalDay } from '@/domain/calendar'
 import { parseAmount } from '@/domain/amount'
+import { expenseSignature, normalizeImportCategory, normalizeImportDate, normalizeImportId, normalizeImportPause, normalizeImportPeople, normalizeImportText, parseExpenseJson, type ExpenseImportIssue, type ExpenseImportResult, type ExpenseImportRow as ImportRow } from '@/domain/expenseImport'
 import { DEMO_EXPENSES } from '@/fixtures/demo'
 import { shareBytes } from '@/services/share'
 import { SyncScreen } from './SyncScreen'
@@ -159,7 +160,7 @@ export function App() {
     window.setTimeout(() => setToast((current) => current?.text === text ? undefined : current), 4500)
   }
 
-  async function handleSaveExpense(input: Pick<Expense, 'amount' | 'category' | 'pause' | 'date'>, id?: string) {
+  async function handleSaveExpense(input: SaveExpenseInput, id?: string) {
     try {
       await saveExpense(input, id)
       closeExpense()
@@ -626,13 +627,17 @@ function AboutScreen({ categories, onBack }: { categories: Category[]; onBack: (
 
 function ExpenseRow({ expense, category, currency, onEdit, onDelete }: { expense: Expense; category?: Category; currency: string; onEdit: (expense: Expense) => void; onDelete: (id: string) => void }) {
   const touchStart = useRef<number | null>(null)
+  const details = [
+    expense.from && expense.to ? `${expense.from} → ${expense.to}` : expense.from ? `From ${expense.from}` : expense.to ? `To ${expense.to}` : '',
+    expense.peopleCount ? `${expense.peopleCount} ${expense.peopleCount === 1 ? 'person' : 'people'}` : '',
+  ].filter(Boolean).join(' · ')
   return <div className="expense-row" onTouchStart={(event) => { touchStart.current = event.touches[0]?.clientX ?? null }} onTouchEnd={(event) => {
     if (touchStart.current === null) return
     const distance = event.changedTouches[0]?.clientX - touchStart.current
     touchStart.current = null
     if (distance < -65) onDelete(expense.id)
     else if (distance > 65) onEdit(expense)
-  }}><CategoryIcon category={category ?? { id: 'other', name: expense.category, icon: 'ShoppingBag', color: '#A8ACCB', archived: false }} /><div className="expense-main"><strong>{expense.note || expense.category}</strong><small>{expense.category} <span>·</span> {new Date(expense.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} <span>·</span> {expense.pause}</small></div><strong className="expense-amount">{currencyAmount(expense.amount, currency)}</strong><div className="row-actions"><button title="Edit expense" onClick={() => onEdit(expense)}><Pencil size={14} /></button><button title="Delete expense" onClick={() => onDelete(expense.id)}><Trash2 size={14} /></button></div></div>
+  }}><CategoryIcon category={category ?? { id: 'other', name: expense.category, icon: 'ShoppingBag', color: '#A8ACCB', archived: false }} /><div className="expense-main"><strong>{expense.note || expense.category}</strong><small>{expense.category} <span>·</span> {new Date(expense.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{expense.pause && <> <span>·</span> {expense.pause}</>}{details && <> <span>·</span> {details}</>}</small></div><strong className="expense-amount">{currencyAmount(expense.amount, currency)}</strong><div className="row-actions"><button title="Edit expense" onClick={() => onEdit(expense)}><Pencil size={14} /></button><button title="Delete expense" onClick={() => onDelete(expense.id)}><Trash2 size={14} /></button></div></div>
 }
 
 function EmptyState({ title, detail }: { title: string; detail: string }) {
@@ -641,12 +646,17 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
 
 function ExpenseSheet({ expense, categories, currency, onClose, onSave }: {
   expense?: Expense; categories: Category[]; currency: string; onClose: () => void
-  onSave: (input: Pick<Expense, 'amount' | 'category' | 'pause' | 'date'>, id?: string) => void
+  onSave: (input: SaveExpenseInput, id?: string) => void
 }) {
   const [digits, setDigits] = useState(expense ? String(expense.amount) : '')
   const [category, setCategory] = useState(expense?.category ?? categories[0]?.name ?? 'Survival')
-  const [pause, setPause] = useState<Expense['pause']>(expense?.pause ?? 'Needed it')
+  const [pause, setPause] = useState<Expense['pause']>(expense ? expense.pause : 'Needed it')
   const [date, setDate] = useState(expense?.date.slice(0, 10) ?? localDay())
+  const [from, setFrom] = useState(expense?.from ?? '')
+  const [to, setTo] = useState(expense?.to ?? '')
+  const [people, setPeople] = useState(expense?.peopleCount ? String(expense.peopleCount) : '')
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const detailsRef = useRef<HTMLDivElement>(null)
   const value = Number(digits)
   const keypad = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫']
   const key = useCallback((value: string) => {
@@ -656,6 +666,8 @@ function ExpenseSheet({ expense, categories, currency, onClose, onSave }: {
   }, [digits])
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
       if (e.key === 'Backspace') { e.preventDefault(); key('⌫') }
       else if (e.key === 'Enter') { /* noop, handled by save */ }
       else if (/^[0-9.]$/.test(e.key)) { e.preventDefault(); key(e.key) }
@@ -663,14 +675,37 @@ function ExpenseSheet({ expense, categories, currency, onClose, onSave }: {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [key])
-  return <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}><section className="expense-sheet" role="dialog" aria-modal="true" aria-label="Add expense"><div className="sheet-handle" /><header className="sheet-head"><div><span className="overline">A MOMENT BEFORE YOU SPEND</span><h2>{expense ? 'Edit this choice' : 'What did you spend?'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={19} /></button></header><div className="amount-display"><span>{currency}</span><strong>{digits ? Number(digits).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0'}</strong></div>
-    <div className="keypad">{keypad.map((number) => <button key={number} className={number === '⌫' ? 'delete-key' : ''} onClick={() => key(number)} aria-label={number === '⌫' ? 'Delete digit' : number}>{number === '⌫' ? <ArrowLeft size={18} /> : number}</button>)}</div>
-    <div className="sheet-group"><div className="sheet-label">CATEGORY</div><div className="category-chips">{categories.map((item) => <button key={item.id} className={category === item.name ? 'selected' : ''} onClick={() => setCategory(item.name)}><CategoryIcon category={item} size={15} />{item.name}</button>)}</div></div>
-    <div className="sheet-group pause-group"><div className="sheet-label">PAUSE · WHAT FEELS TRUE?</div><div className="pause-chips">{PAUSE_TAGS.map((tag) => <button key={tag} className={pause === tag ? 'selected' : ''} onClick={() => setPause(tag)}>{tag === 'Needed it' ? 'Needed it' : tag === 'Wanted it' ? 'Wanted it' : 'Regret'}</button>)}</div></div>
-    <div className="date-line"><DatePicker value={date} onChange={setDate} label="Expense date" /></div>
-    <button className="button-primary save-expense" disabled={!Number.isFinite(value) || value <= 0 || !category} onClick={() => onSave({ amount: value, category, pause, date: new Date(`${date}T12:00:00`).toISOString() }, expense?.id)}>{expense ? 'Save changes' : 'Done'} <Check size={17} /></button>
-    <p className="sheet-footnote">No judgement. Just noticing.</p>
-  </section></div>
+  useEffect(() => {
+    if (detailsRef.current) detailsRef.current.inert = !detailsOpen
+  }, [detailsOpen])
+  return <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+    <section className="expense-sheet" role="dialog" aria-modal="true" aria-label="Add expense">
+      <div className="sheet-handle" />
+      <header className="sheet-head">
+        <div><span className="overline">A MOMENT BEFORE YOU SPEND</span><h2>{expense ? 'Edit this choice' : 'What did you spend?'}</h2></div>
+        <button className="icon-button" onClick={onClose} aria-label="Close"><X size={19} /></button>
+      </header>
+      <div className="amount-display"><span>{currency}</span><strong>{digits ? Number(digits).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0'}</strong></div>
+      <div className="keypad">{keypad.map((number) => <button key={number} className={number === '⌫' ? 'delete-key' : ''} onClick={() => key(number)} aria-label={number === '⌫' ? 'Delete digit' : number}>{number === '⌫' ? <ArrowLeft size={18} /> : number}</button>)}</div>
+      <div className="sheet-group"><div className="sheet-label">CATEGORY</div><div className="category-chips">{categories.map((item) => <button key={item.id} className={category === item.name ? 'selected' : ''} onClick={() => setCategory(item.name)}><CategoryIcon category={item} size={15} />{item.name}</button>)}</div></div>
+      <div className="sheet-group pause-group"><div className="sheet-label">PAUSE · WHAT FEELS TRUE?</div><div className="pause-chips">{PAUSE_TAGS.map((tag) => <button key={tag} className={pause === tag ? 'selected' : ''} onClick={() => setPause(tag)}>{tag === 'Needed it' ? 'Needed it' : tag === 'Wanted it' ? 'Wanted it' : 'Regret'}</button>)}</div></div>
+      <div className="date-line"><DatePicker value={date} onChange={setDate} label="Expense date" /></div>
+      <button type="button" className="sheet-details-toggle" aria-expanded={detailsOpen} aria-controls="expense-details" onClick={() => setDetailsOpen((open) => !open)}>
+        Additional details <ChevronRight size={14} />
+      </button>
+      <div id="expense-details" ref={detailsRef} className={`sheet-details${detailsOpen ? ' open' : ''}`} aria-hidden={!detailsOpen}>
+        <div className="sheet-details-inner">
+          <div className="sheet-details-grid">
+            <label className="sheet-detail-field"><span>From</span><input value={from} onChange={(event) => setFrom(event.target.value)} placeholder="Optional" autoComplete="off" /></label>
+            <label className="sheet-detail-field"><span>To</span><input value={to} onChange={(event) => setTo(event.target.value)} placeholder="Optional" autoComplete="off" /></label>
+            <label className="sheet-detail-field sheet-detail-people"><span>People</span><input type="number" min="1" step="1" inputMode="numeric" value={people} onChange={(event) => setPeople(event.target.value.replace(/\D/g, ''))} placeholder="Optional" /></label>
+          </div>
+        </div>
+      </div>
+      <button className="button-primary save-expense" disabled={!Number.isFinite(value) || value <= 0 || !category} onClick={() => onSave({ amount: value, category, pause, date: new Date(`${date}T12:00:00`).toISOString(), note: expense?.note, from: from.trim() || null, to: to.trim() || null, peopleCount: people ? Number(people) : null }, expense?.id)}>{expense ? 'Save changes' : 'Done'} <Check size={17} /></button>
+      <p className="sheet-footnote">No judgement. Just noticing.</p>
+    </section>
+  </div>
 }
 
 function InsightsScreen({ expenses, budget, categories, currency, previousSpent }: { expenses: Expense[]; budget: ReturnType<typeof calculateBudget>; categories: Category[]; currency: string; previousSpent: number }) {
@@ -697,25 +732,117 @@ function InsightsScreen({ expenses, budget, categories, currency, previousSpent 
   </div>
 }
 
-type ImportRow = Pick<Expense, 'amount' | 'category' | 'pause' | 'date'>
+type ParsedImportFile = ExpenseImportResult & { fileName: string; text?: string }
+
+function formatImportDate(value: string): string {
+  return new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 function HistoryScreen({ expenses, categories, currency, search, onSearch, filter, onFilter, onEdit, onDelete, onExport, onPdf, onImport }: {
   expenses: Expense[]; categories: Category[]; currency: string; search: string; onSearch: (value: string) => void; filter: string; onFilter: (value: string) => void; onEdit: (expense: Expense) => void; onDelete: (id: string) => void; onExport: () => void; onPdf: () => void; onImport: (rows: ImportRow[]) => void
 }) {
-  const [preview, setPreview] = useState<{ fileName: string; rows: ImportRow[]; skipped: number }>()
+  const [preview, setPreview] = useState<ParsedImportFile>()
   const [importError, setImportError] = useState('')
   const [reading, setReading] = useState(false)
-  const filtered = expenses.filter((expense) => (filter === 'All' || expense.category === filter) && `${expense.category} ${expense.note ?? ''} ${expense.pause}`.toLowerCase().includes(search.toLowerCase()))
+  const filtered = expenses.filter((expense) => (filter === 'All' || expense.category === filter) && `${expense.category} ${expense.note ?? ''} ${expense.pause ?? ''} ${expense.from ?? ''} ${expense.to ?? ''} ${expense.peopleCount ?? ''}`.toLowerCase().includes(search.toLowerCase()))
   const byDay = new Map<string, Expense[]>()
   for (const expense of filtered) {
     const key = expense.date.slice(0, 10)
     byDay.set(key, [...(byDay.get(key) ?? []), expense])
   }
-  return <div className="panel history-panel"><div className="history-toolbar"><label className="search-field"><Search size={16} /><input placeholder="Search expenses" value={search} onChange={(e) => onSearch(e.target.value)} /></label><Select ariaLabel="Filter by category" value={filter} onChange={onFilter} options={[{ value: 'All', label: 'All categories' }, ...categories.map((c) => ({ value: c.name, label: c.name }))]} /><div className="history-actions"><button className="button-quiet" onClick={onExport}><FileSpreadsheet size={15} /> Excel</button><button className="button-quiet" onClick={onPdf}><Download size={15} /> PDF</button><label className="button-quiet file-import"><ArrowUpFromLine size={15} /> Import<input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setReading(true); setImportError(''); void parseImportFile(file).then((result) => { if (!result.rows.length) throw new Error('No valid expenses found. Include Amount and Category columns.') ; setPreview({ fileName: file.name, ...result }) }).catch((error: unknown) => setImportError(error instanceof Error ? error.message : 'Could not read this spreadsheet.')).finally(() => setReading(false)) } e.currentTarget.value = '' }} /></label></div></div>
+
+  function updatePeriod(start: string, end: string) {
+    if (!preview?.text) return
+    try {
+      const next = parseExpenseJson(preview.text, {
+        periodStart: start,
+        periodEnd: end,
+        supportedCategories: categories.map((category) => category.name),
+      })
+      setPreview({ fileName: preview.fileName, text: preview.text, ...next })
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Could not update the import period.')
+    }
+  }
+
+  function confirmImport(rows: ImportRow[]) {
+    onImport(rows)
+    setPreview(undefined)
+  }
+
+  return <div className="panel history-panel"><div className="history-toolbar"><label className="search-field"><Search size={16} /><input placeholder="Search expenses" value={search} onChange={(e) => onSearch(e.target.value)} /></label><Select ariaLabel="Filter by category" value={filter} onChange={onFilter} options={[{ value: 'All', label: 'All categories' }, ...categories.map((c) => ({ value: c.name, label: c.name }))]} /><div className="history-actions"><button className="button-quiet" onClick={onExport}><FileSpreadsheet size={15} /> Excel</button><button className="button-quiet" onClick={onPdf}><Download size={15} /> PDF</button><label className="button-quiet file-import"><ArrowUpFromLine size={15} /> Import<input type="file" accept=".json,.xlsx,.xls,.csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setReading(true); setImportError(''); void parseImportFile(file, categories.map((category) => category.name)).then((result) => { if (!result.rows.length && !result.pending.length) throw new Error('No valid expenses found. Check amounts, dates, and categories.'); setPreview(result) }).catch((error: unknown) => setImportError(error instanceof Error ? error.message : 'Could not read this file.')).finally(() => setReading(false)) } e.currentTarget.value = '' }} /></label></div></div>
     {byDay.size ? [...byDay.entries()].map(([day, items]) => <section className="history-day" key={day}><div className="day-head"><span>{new Date(day + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span><b>{currencyAmount(items.reduce((sum, e) => sum + e.amount, 0), currency)}</b></div>{items.map((e) => <ExpenseRow key={e.id} expense={e} category={categories.find((c) => c.name === e.category)} currency={currency} onEdit={onEdit} onDelete={onDelete} />)}</section>) : <EmptyState title={search ? 'Nothing found.' : 'No choices yet.'} detail={search ? 'Try another search.' : 'Add your first expense when you’re ready.'} />}
     {importError && <p className="import-error" role="alert">{importError}</p>}
-    {reading && <div className="import-status">Reading your spreadsheet…</div>}
-    {preview && <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setPreview(undefined) }}><section className="import-preview panel" role="dialog" aria-modal="true" aria-label="Review import"><button className="icon-button preview-close" onClick={() => setPreview(undefined)} aria-label="Close"><X size={18} /></button><span className="overline">BEFORE IT COMES IN</span><h2>Review your expenses</h2><p>{preview.fileName} · {preview.rows.length} ready to import{preview.skipped ? ` · ${preview.skipped} blank or invalid rows skipped` : ''}</p><div className="preview-rows"><div className="preview-heading"><span>Date</span><span>Category</span><span>Amount</span></div>{preview.rows.slice(0, 5).map((row, i) => <div key={i}><span>{row.date.slice(0, 10)}</span><span>{row.category}</span><b>{currencyAmount(row.amount, currency)}</b></div>)}{preview.rows.length > 5 && <small>and {preview.rows.length - 5} more…</small>}</div><div className="preview-actions"><button className="button-quiet back-button" onClick={() => setPreview(undefined)}><span className="back-icon"><ChevronLeft size={16} /></span> Back</button><button className="button-primary" onClick={() => { onImport(preview.rows); setPreview(undefined) }}>Import {preview.rows.length} expenses <ArrowDownToLine size={15} /></button></div></section></div>}
+    {reading && <div className="import-status">Reading your file…</div>}
+    {preview && <ImportPreviewDialog preview={preview} categories={categories} currency={currency} onCancel={() => setPreview(undefined)} onConfirm={confirmImport} onPeriodChange={updatePeriod} />}
+  </div>
+}
+
+function ImportPreviewDialog({ preview, categories, currency, onCancel, onConfirm, onPeriodChange }: {
+  preview: ParsedImportFile
+  categories: Category[]
+  currency: string
+  onCancel: () => void
+  onConfirm: (rows: ImportRow[]) => void
+  onPeriodChange: (start: string, end: string) => void
+}) {
+  const [mapping, setMapping] = useState<Record<string, string>>({})
+  const detected = preview.rows.length + preview.pending.length
+  const ready = preview.rows.length
+  const total = [...preview.rows, ...preview.pending].reduce((sum, row) => sum + row.amount, 0)
+  const allMapped = preview.unsupportedCategories.every((category) => Boolean(mapping[category]))
+  const canImport = ready > 0 && preview.pending.length === 0 && allMapped
+  const dates = preview.rows.map((row) => row.date.slice(0, 10)).sort()
+  const dateRange = dates.length ? `${formatImportDate(dates[0])} – ${formatImportDate(dates[dates.length - 1])}` : 'Choose a period'
+  const detectedCategories = [...new Set([...preview.rows, ...preview.pending].map((row) => row.category))]
+  const items = [
+    ...preview.rows.map((row) => ({ key: row.id ?? `${row.date}-${row.category}`, date: row.date.slice(0, 10), category: row.category, amount: row.amount })),
+    ...preview.pending.map((row) => ({ key: `pending-${row.row}`, date: `Day ${row.day}`, category: row.category, amount: row.amount })),
+  ]
+
+  return <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel() }}>
+    <section className="import-preview panel" role="dialog" aria-modal="true" aria-label="Review import">
+      <button className="icon-button preview-close" onClick={onCancel} aria-label="Close"><X size={18} /></button>
+      <span className="overline">BEFORE IT COMES IN</span>
+      <h2>Review your expenses</h2>
+      <p>{preview.fileName} · {detected} detected · {ready} ready to import{preview.skipped ? ` · ${preview.skipped} rows skipped` : ''}</p>
+      <div className="import-summary">
+        <div><span>Detected</span><b>{detected} {detected === 1 ? 'expense' : 'expenses'}</b></div>
+        <div><span>Total amount</span><b>{currencyAmount(total, currency)}</b></div>
+        <div><span>Date range</span><b>{dateRange}</b></div>
+        <div><span>Categories</span><b>{detectedCategories.join(', ') || 'None'}</b></div>
+      </div>
+      {preview.pending.length > 0 && <div className="import-attention">
+        <b>{preview.pending.length} {preview.pending.length === 1 ? 'record needs' : 'records need'} a period</b>
+        <p>These records use day numbers. Choose the salary cycle that contains them.</p>
+        <div className="import-period-grid">
+          <label>Period start<input type="date" value={preview.periodStart ?? ''} onChange={(e) => onPeriodChange(e.target.value, preview.periodEnd ?? '')} /></label>
+          <label>Period end<input type="date" value={preview.periodEnd ?? ''} onChange={(e) => onPeriodChange(preview.periodStart ?? '', e.target.value)} /></label>
+        </div>
+        {preview.period.label && <small>From the file: {preview.period.label}</small>}
+      </div>}
+      {preview.unsupportedCategories.length > 0 && <div className="import-mapping">
+        <b>Match these categories</b>
+        <p>Choose an existing category for each name before importing.</p>
+        {preview.unsupportedCategories.map((category) => <label key={category}><span>{category}</span><select aria-label={`Map ${category} to a category`} value={mapping[category] ?? ''} onChange={(e) => setMapping((current) => ({ ...current, [category]: e.target.value }))}><option value="">Choose a category</option>{categories.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></label>)}
+      </div>}
+      {preview.issues.length > 0 && <div className="import-issues">
+        <b>Records requiring attention</b>
+        <ul>{preview.issues.slice(0, 5).map((issue, index) => <li key={`${issue.row}-${index}`} className={issue.severity}><span>Row {issue.row}</span>{issue.message}</li>)}</ul>
+        {preview.issues.length > 5 && <small>and {preview.issues.length - 5} more…</small>}
+      </div>}
+      <div className="preview-rows">
+        <div className="preview-heading"><span>Date</span><span>Category</span><span>Amount</span></div>
+        {items.slice(0, 5).map((row) => <div key={row.key}><span>{row.date}</span><span>{row.category}</span><b>{currencyAmount(row.amount, currency)}</b></div>)}
+        {items.length > 5 && <small>and {items.length - 5} more…</small>}
+      </div>
+      {!allMapped && <p className="import-blocker">Match every unsupported category to continue.</p>}
+      {preview.pending.length > 0 && <p className="import-blocker">Choose a period for every day-only record to continue.</p>}
+      <div className="preview-actions">
+        <button className="button-quiet back-button" onClick={onCancel}><span className="back-icon"><ChevronLeft size={16} /></span> Back</button>
+        <button className="button-primary" disabled={!canImport} onClick={() => onConfirm(preview.rows.map((row) => ({ ...row, category: mapping[row.category] ?? row.category })))}>Import {ready} {ready === 1 ? 'expense' : 'expenses'} <ArrowDownToLine size={15} /></button>
+      </div>
+    </section>
   </div>
 }
 
@@ -835,10 +962,10 @@ async function exportExcel(expenses: Expense[], currency: string, month: string,
     const workbook = new ExcelJS.Workbook()
     workbook.creator = 'Kakeibo'
     const sheet = workbook.addWorksheet('Monthly choices')
-    sheet.addRow(['Date', 'Amount', 'Currency', 'Category', 'Pause'])
-    expenses.forEach((expense) => sheet.addRow([expense.date.slice(0, 10), expense.amount, currency, expense.category, expense.pause]))
+    sheet.addRow(['Date', 'Amount', 'Currency', 'Category', 'Pause', 'Note', 'From', 'To', 'People'])
+    expenses.forEach((expense) => sheet.addRow([expense.date.slice(0, 10), expense.amount, currency, expense.category, expense.pause ?? '', expense.note ?? '', expense.from ?? '', expense.to ?? '', expense.peopleCount ?? '']))
     sheet.getRow(1).font = { bold: true, color: { argb: 'FF343D35' } }
-    sheet.columns = [{ width: 18 }, { width: 18 }, { width: 12 }, { width: 20 }, { width: 20 }]
+    sheet.columns = [{ width: 18 }, { width: 18 }, { width: 12 }, { width: 20 }, { width: 20 }, { width: 28 }, { width: 18 }, { width: 18 }, { width: 10 }]
     const bytes = new Uint8Array(await workbook.xlsx.writeBuffer())
     await shareBytes(`Kakeibo_${month}.xlsx`, bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     notify('Excel export ready')
@@ -897,7 +1024,7 @@ async function exportPdf(expenses: Expense[], currency: string, month: string, n
       if (y > 275) { pdf.addPage(); y = 20 }
       pdf.setFontSize(9)
       pdf.setTextColor(52, 61, 53)
-      pdf.text(`${expense.date.slice(0, 10)}  ·  ${expense.note || expense.category}  ·  ${expense.pause}`, 18, y, { maxWidth: 130 })
+      pdf.text(`${expense.date.slice(0, 10)}  ·  ${expense.note || expense.category}${expense.pause ? `  ·  ${expense.pause}` : ''}`, 18, y, { maxWidth: 130 })
       pdf.text(currencyAmount(expense.amount, currency), 190, y, { align: 'right' })
       y += 8
     }
@@ -907,7 +1034,11 @@ async function exportPdf(expenses: Expense[], currency: string, month: string, n
   } catch (error) { notify(error instanceof Error ? error.message : 'Could not export PDF') }
 }
 
-async function parseImportFile(file: File): Promise<{ rows: ImportRow[]; skipped: number }> {
+async function parseImportFile(file: File, supportedCategories: string[]): Promise<ParsedImportFile> {
+  if (/\.json$/i.test(file.name)) {
+    const text = await file.text()
+    return { fileName: file.name, text, ...parseExpenseJson(text, { supportedCategories }) }
+  }
   let matrix: unknown[][]
   if (/\.csv$/i.test(file.name)) {
     matrix = parseCsvMatrix(await file.text())
@@ -930,24 +1061,77 @@ async function parseImportFile(file: File): Promise<{ rows: ImportRow[]; skipped
   if (amountCol < 0 || categoryCol < 0) throw new Error('Import needs Amount and Category columns.')
   const dateCol = index('date')
   const pauseCol = index('pause')
+  const noteCol = index('note') >= 0 ? index('note') : index('description')
+  const fromCol = index('from')
+  const toCol = index('to')
+  const idCol = index('id')
+  const peopleCol = ['peoplecount', 'people count', 'people'].map(index).find((value) => value >= 0) ?? -1
   const rows: ImportRow[] = []
+  const issues: ExpenseImportIssue[] = []
+  const detectedCategories = new Set<string>()
+  const unsupportedCategories = new Set<string>()
   let skipped = 0
   for (const [rowNumber, row] of matrix.slice(1).entries()) {
+    const sourceRow = rowNumber + 2
     if (row.every((value) => String(value ?? '').trim() === '')) continue
     const amount = parseAmount(row[amountCol])
-    const category = String(row[categoryCol] ?? '').trim()
-    if (amount === null || amount <= 0 || !category) { skipped += 1; continue }
+    if (amount === null || amount <= 0) {
+      skipped += 1
+      issues.push({ row: sourceRow, severity: 'error', field: 'amount', message: 'Amount must be a positive number.' })
+      continue
+    }
+    const category = normalizeImportCategory(row[categoryCol], supportedCategories)
+    if (!category) {
+      skipped += 1
+      issues.push({ row: sourceRow, severity: 'error', field: 'category', message: 'Category is required.' })
+      continue
+    }
+    detectedCategories.add(category)
+    if (supportedCategories.length && !supportedCategories.some((name) => name.trim().toLowerCase() === category.toLowerCase())) unsupportedCategories.add(category)
     const rawDate = dateCol >= 0 ? row[dateCol] : undefined
-    let date = new Date()
-    if (rawDate instanceof Date) date = rawDate
-    else if (typeof rawDate === 'number' && rawDate > 10000) date = new Date(Math.round((rawDate - 25569) * 86400000))
-    else if (String(rawDate ?? '').trim()) date = new Date(String(rawDate))
-    if (!Number.isFinite(date.getTime())) throw new Error(`The date in row ${rowNumber + 2} could not be read.`)
-    const rawPause = pauseCol >= 0 ? String(row[pauseCol] ?? '').trim() : ''
-    const pause = PAUSE_TAGS.includes(rawPause as Expense['pause']) ? rawPause as Expense['pause'] : 'Needed it'
-    rows.push({ amount, category, pause, date: new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12).toISOString() })
+    const hasDate = rawDate instanceof Date || (typeof rawDate === 'number' && rawDate > 10000) || Boolean(String(rawDate ?? '').trim())
+    const date = normalizeImportDate(hasDate ? rawDate : new Date())
+    if (!date) {
+      skipped += 1
+      issues.push({ row: sourceRow, severity: 'error', field: 'date', message: 'Date could not be read.' })
+      continue
+    }
+    const pauseResult = normalizeImportPause(pauseCol >= 0 ? row[pauseCol] : undefined)
+    if (pauseResult.warning) issues.push({ row: sourceRow, severity: 'warning', field: 'pause', message: pauseResult.warning })
+    const rawPeople = peopleCol >= 0 ? row[peopleCol] : undefined
+    const peopleCount = normalizeImportPeople(rawPeople)
+    if (rawPeople !== undefined && rawPeople !== null && String(rawPeople).trim() !== '' && peopleCount === null) {
+      issues.push({ row: sourceRow, severity: 'warning', field: 'peopleCount', message: 'People count must be a positive whole number and was left empty.' })
+    }
+    const id = idCol >= 0 ? normalizeImportId(row[idCol]) : null
+    const imported: ImportRow = {
+      amount,
+      category,
+      date,
+      ...(id ? { id } : {}),
+      ...(pauseResult.pause ? { pause: pauseResult.pause } : {}),
+    }
+    const note = noteCol >= 0 ? normalizeImportText(row[noteCol]) : null
+    const from = fromCol >= 0 ? normalizeImportText(row[fromCol]) : null
+    const to = toCol >= 0 ? normalizeImportText(row[toCol]) : null
+    if (note) imported.note = note
+    if (from) imported.from = from
+    if (to) imported.to = to
+    if (peopleCount) imported.peopleCount = peopleCount
+    rows.push(imported)
   }
-  return { rows, skipped }
+  return {
+    fileName: file.name,
+    rows,
+    pending: [],
+    skipped,
+    issues,
+    categories: [...detectedCategories],
+    unsupportedCategories: [...unsupportedCategories],
+    format: 'sheet',
+    period: {},
+    needsPeriod: false,
+  }
 }
 
 function cellValue(value: ExcelJS.CellValue): unknown {
@@ -996,14 +1180,52 @@ function parseCsvMatrix(input: string): string[][] {
 
 async function importExpenses(rows: ImportRow[], settings: AppSettings, refresh: () => Promise<void>, notify: (text: string) => void) {
   try {
+    let imported = 0
+    let duplicates = 0
+    let invalid = 0
     await db.transaction('rw', [db.expenses, db.audit], async () => {
+      const existing = await db.expenses.toArray()
+      const existingIds = new Set(existing.map((expense) => expense.id))
+      const seen = new Set(existing.filter((expense) => !expense.deletedAt).map(expenseSignature))
+      const usedIds = new Set<string>()
       for (const row of rows) {
-        const category = settings.categories.find((item) => item.name.toLowerCase() === row.category.toLowerCase())?.name ?? row.category
-        await saveExpense({ ...row, category })
+        const amount = parseAmount(row.amount)
+        const category = settings.categories.find((item) => item.name.toLowerCase() === row.category.trim().toLowerCase())?.name
+        const date = normalizeImportDate(row.date)
+        if (amount === null || amount <= 0 || !category || !date) { invalid += 1; continue }
+        const pause = row.pause === undefined || row.pause === null ? undefined : normalizeImportPause(row.pause).pause
+        const peopleCount = row.peopleCount === undefined || row.peopleCount === null ? undefined : normalizeImportPeople(row.peopleCount)
+        const candidate: ImportRow = {
+          amount,
+          category,
+          date,
+          ...(pause ? { pause } : {}),
+          ...(row.note ? { note: row.note } : {}),
+          ...(row.from ? { from: row.from } : {}),
+          ...(row.to ? { to: row.to } : {}),
+          ...(peopleCount ? { peopleCount } : {}),
+        }
+        const signature = expenseSignature(candidate)
+        if (seen.has(signature)) { duplicates += 1; continue }
+        const requestedId = normalizeImportId(row.id)
+        let id = requestedId && !existingIds.has(requestedId) && !usedIds.has(requestedId) ? requestedId : undefined
+        if (!id) {
+          do { id = uid() } while (existingIds.has(id) || usedIds.has(id))
+        }
+        await saveExpense(candidate, id)
+        existingIds.add(id)
+        usedIds.add(id)
+        seen.add(signature)
+        imported += 1
       }
     })
     await refresh()
-    notify(`${rows.length} expense${rows.length === 1 ? '' : 's'} imported`)
+    const parts: string[] = []
+    if (imported) parts.push(`${imported} expense${imported === 1 ? '' : 's'} imported`)
+    else parts.push('No new expenses imported')
+    if (duplicates) parts.push(`${duplicates} duplicate${duplicates === 1 ? '' : 's'} skipped`)
+    if (invalid) parts.push(`${invalid} row${invalid === 1 ? '' : 's'} skipped`)
+    notify(parts.join(' · '))
   } catch (error) { notify(error instanceof Error ? error.message : 'Could not import these expenses') }
 }
 
