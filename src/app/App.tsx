@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs'
 import { jsPDF } from 'jspdf'
 import {
   ArrowDownToLine, ArrowLeft, ArrowUpFromLine, BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight,
-  CircleHelp, ClipboardPaste, Clock3, Coffee, Download, FileSpreadsheet, Heart, House, Info,
+  CircleHelp, Clock3, Coffee, Download, FileSpreadsheet, Heart, House, Info,
   MoreHorizontal, Pencil, Plus, RefreshCw, Search, SettingsIcon, ShoppingBag, Smartphone, Sun, Trash2, Umbrella, Wallet, X,
    Home, BookOpen as BookOpenIcon, BarChart3 as BarChartIcon, Clock3 as ClockIcon, Heart as HeartIcon
 } from 'lucide-react'
@@ -875,6 +875,64 @@ function RitualScreen({ step, onStep, month, plan, reflection, budget, expenses,
     </section></div>
 }
 
+function RestoreBackupDialog({ onClose, onImport }: {
+  onClose: () => void
+  onImport: (source: File | string) => Promise<boolean>
+}) {
+  const [backupText, setBackupText] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [restoring, setRestoring] = useState(false)
+  const [error, setError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function restore() {
+    if (restoring) return
+    if (!selectedFile && !backupText.trim()) {
+      setError('Choose a backup file or paste the JSON from one.')
+      return
+    }
+    setError('')
+    setRestoring(true)
+    try {
+      const source = selectedFile ?? backupText
+      if (await onImport(source)) onClose()
+    } finally {
+      setRestoring(false)
+    }
+  }
+
+  return <div className="sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !restoring) onClose() }}>
+    <section className="restore-backup panel" role="dialog" aria-modal="true" aria-labelledby="restore-backup-title">
+      <button className="icon-button preview-close" type="button" onClick={onClose} disabled={restoring} aria-label="Close"><X size={18} /></button>
+      <span className="overline">YOUR DATA</span>
+      <h2 id="restore-backup-title">Restore backup</h2>
+      <p className="restore-backup-lead">Replace everything on this device with a Kakeibo backup file. Export your current data first if you may want it later.</p>
+      <div className="backup-paste">
+        <label htmlFor="restore-backup-file">Backup file</label>
+        <div className="restore-backup-file">
+          <button className="button-quiet" type="button" onClick={() => fileInputRef.current?.click()} disabled={restoring}><ArrowUpFromLine size={16} />{selectedFile ? 'Change file' : 'Choose JSON file'}</button>
+          {selectedFile && <span className="restore-backup-filename">{selectedFile.name}</span>}
+          <input ref={fileInputRef} id="restore-backup-file" type="file" accept=".json,application/json" hidden onChange={(event) => {
+            const file = event.target.files?.[0] ?? null
+            setSelectedFile(file)
+            if (file) setBackupText('')
+            setError('')
+            event.currentTarget.value = ''
+          }} />
+        </div>
+        <label htmlFor="restore-backup-json">Or paste JSON</label>
+        <textarea id="restore-backup-json" rows={8} value={backupText} disabled={Boolean(selectedFile) || restoring} onChange={(event) => { setBackupText(event.target.value); setError('') }} placeholder='{"version": 1, "tables": { … }}' spellCheck={false} aria-describedby="restore-backup-help" />
+        <p className="backup-paste-help" id="restore-backup-help">Use a file or pasted text — not both. You will confirm before anything is replaced.</p>
+        {error && <p className="import-error" role="alert">{error}</p>}
+        <div className="backup-paste-actions">
+          <button className="button-primary" type="button" disabled={restoring || (!selectedFile && !backupText.trim())} onClick={() => void restore()}>{restoring ? 'Restoring…' : 'Restore backup'}</button>
+          <button className="button-quiet" type="button" onClick={onClose} disabled={restoring}>Cancel</button>
+        </div>
+      </div>
+    </section>
+  </div>
+}
+
 function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onExport, onImport, onAudit, onSync, onAbout, onFactoryReset, onAddWidget }: {
   settings: AppSettings; plan?: MonthPlan; onSave: (patch: Partial<AppSettings>) => Promise<void>; onPlanSave: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onDemoChange: (enabled: boolean) => void; onExport: () => void; onImport: (source: File | string) => Promise<boolean>; onAudit: () => void; onSync: () => void
   onAbout: () => void
@@ -897,16 +955,7 @@ function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onEx
   const [reminderNightTime, setReminderNightTime] = useState(settings.reminderNightTime ?? '21:00')
   const [reminderWeeklyEnabled, setReminderWeeklyEnabled] = useState(settings.reminderWeeklyEnabled ?? true)
   const [reminderWeeklyDay, setReminderWeeklyDay] = useState(String(settings.reminderWeeklyDay ?? 0))
-  const [pasteOpen, setPasteOpen] = useState(false)
-  const [backupText, setBackupText] = useState('')
-  const [restoringBackup, setRestoringBackup] = useState(false)
-  async function restorePastedBackup() {
-    if (!backupText.trim() || restoringBackup) return
-    setRestoringBackup(true)
-    try {
-      if (await onImport(backupText)) { setBackupText(''); setPasteOpen(false) }
-    } finally { setRestoringBackup(false) }
-  }
+  const [restoreOpen, setRestoreOpen] = useState(false)
   useEffect(() => { setCategories(settings.categories) }, [settings.categories])
   useEffect(() => { setRemindersEnabled(settings.remindersEnabled ?? true); setReminderMiddayTime(settings.reminderMiddayTime ?? '12:00'); setReminderNightTime(settings.reminderNightTime ?? '21:00'); setReminderWeeklyEnabled(settings.reminderWeeklyEnabled ?? true); setReminderWeeklyDay(String(settings.reminderWeeklyDay ?? 0)); }, [settings]);
   const saveCategoryList = async (next: Category[]) => {
@@ -955,7 +1004,7 @@ function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onEx
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('feel')}><span className="settings-icon"><Sun size={18} /></span><div><h2>Appearance</h2><small>Quiet, comfortable, and yours.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.feel ? 'open' : ''}`} /></header>{settingsOpen.feel && <><div className="settings-row"><span>Theme</span><Select value={settings.theme} onChange={(v) => void onSave({ theme: v as AppSettings['theme'] })} options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'auto', label: 'Match device' }]} /></div><div className="settings-row"><span>Calendar</span><Select ariaLabel="Calendar system" value={calendarPreference.system} onChange={(v) => setCalendarPreference({ system: v as CalendarSystem })} options={[{ value: 'gregorian', label: 'Gregorian' }, { value: 'ethiopian', label: 'Ethiopian' }]} /></div>{calendarPreference.system === 'ethiopian' && <div className="settings-row"><span>Ethiopian day names</span><Select ariaLabel="Ethiopian day names" value={calendarPreference.language} onChange={(v) => setCalendarPreference({ language: v as CalendarLanguage })} options={[{ value: 'en', label: 'English' }, { value: 'am', label: 'አማርኛ' }]} /></div>}</>}</section>
     {onAddWidget && <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('widget')}><span className="settings-icon"><Plus size={18} /></span><div><h2>Home screen widget</h2><small>See what is left without opening Kakeibo.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.widget ? 'open' : ''}`} /></header>{settingsOpen.widget && <div className="settings-row"><span>Add the spendable-left widget to your home screen</span><button className="button-quiet" onClick={onAddWidget}><Plus size={16} /> Add widget</button></div>}</section>}
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('reminders')}><span className="settings-icon"><Clock3 size={18} /></span><div><h2>Reminders</h2><small>Gentle nudges to register your spending.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.reminders ? 'open' : ''}`} /></header>{settingsOpen.reminders && <><div className="settings-row"><span>Enable reminders</span><Toggle checked={remindersEnabled} onChange={(v) => { setRemindersEnabled(v); void onSave({ remindersEnabled: v }) }} /></div><div className="settings-row"><span>Midday reminder</span><TimePicker value={reminderMiddayTime} onChange={(v) => { setReminderMiddayTime(v); void onSave({ reminderMiddayTime: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Night reminder</span><TimePicker value={reminderNightTime} onChange={(v) => { setReminderNightTime(v); void onSave({ reminderNightTime: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Weekly report</span><Toggle checked={reminderWeeklyEnabled} onChange={(v) => { setReminderWeeklyEnabled(v); void onSave({ reminderWeeklyEnabled: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Weekly report day</span><Select value={reminderWeeklyDay} onChange={(v) => { setReminderWeeklyDay(v); void onSave({ reminderWeeklyDay: Number(v) }) }} disabled={!remindersEnabled || !reminderWeeklyEnabled} options={[{ value: '0', label: 'Sunday' }, { value: '1', label: 'Monday' }, { value: '2', label: 'Tuesday' }, { value: '3', label: 'Wednesday' }, { value: '4', label: 'Thursday' }, { value: '5', label: 'Friday' }, { value: '6', label: 'Saturday' }]} /></div></>}</section>
-    <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('data')}><span className="settings-icon"><ArrowDownToLine size={18} /></span><div><h2>Your data</h2><small>Keep a copy or move it with you.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.data ? 'open' : ''}`} /></header>      {settingsOpen.data && <><div className="data-actions"><button className="button-quiet" onClick={onExport}><Download size={16} /> Backup data</button><label className="button-quiet file-import"><ArrowUpFromLine size={16} /> Restore backup<input type="file" accept=".json" onChange={(e) => { const file = e.target.files?.[0]; if (file) void onImport(file); e.currentTarget.value = '' }} /></label><button className="button-quiet" type="button" aria-expanded={pasteOpen} aria-controls="backup-paste" onClick={() => setPasteOpen((open) => !open)}>{pasteOpen ? <X size={16} /> : <ClipboardPaste size={16} />} Paste backup</button><button className="button-quiet" onClick={onSync}><RefreshCw size={16} /> Sync devices</button><button className="button-quiet" onClick={onAudit}><Clock3 size={16} /> View audit log</button></div>{pasteOpen && <div className="backup-paste" id="backup-paste"><label htmlFor="backup-json">Paste the JSON from a backup file</label><textarea id="backup-json" rows={6} value={backupText} onChange={(event) => setBackupText(event.target.value)} placeholder='{"version": 1, "tables": { … }}' spellCheck={false} aria-describedby="backup-paste-help" /><p className="backup-paste-help" id="backup-paste-help">Paste the whole contents of a Kakeibo backup (.json) file. Current data is replaced after you confirm.</p><div className="backup-paste-actions"><button className="button-primary" type="button" disabled={!backupText.trim() || restoringBackup} onClick={() => void restorePastedBackup()}>{restoringBackup ? 'Restoring…' : 'Restore pasted backup'}</button><button className="button-quiet" type="button" onClick={() => { setPasteOpen(false); setBackupText('') }}>Cancel</button></div></div>}<div className="factory-reset-row"><span><b>Factory reset</b><small>Erase everything on this device and start fresh.</small></span><button className="button-danger-quiet" onClick={() => void onFactoryReset()}><Trash2 size={15} /> Factory reset</button></div></>}</section>
+    <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('data')}><span className="settings-icon"><ArrowDownToLine size={18} /></span><div><h2>Your data</h2><small>Keep a copy or move it with you.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.data ? 'open' : ''}`} /></header>{settingsOpen.data && <><div className="data-actions"><button className="button-quiet" onClick={onExport}><Download size={16} /> Backup data</button><button className="button-quiet" type="button" onClick={() => setRestoreOpen(true)}><ArrowUpFromLine size={16} /> Restore backup</button><button className="button-quiet" onClick={onSync}><RefreshCw size={16} /> Sync devices</button><button className="button-quiet" onClick={onAudit}><Clock3 size={16} /> View audit log</button></div>{restoreOpen && <RestoreBackupDialog onClose={() => setRestoreOpen(false)} onImport={onImport} />}<div className="factory-reset-row"><span><b>Factory reset</b><small>Erase everything on this device and start fresh.</small></span><button className="button-danger-quiet" onClick={() => void onFactoryReset()}><Trash2 size={15} /> Factory reset</button></div></>}</section>
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('about')}><span className="settings-icon"><Info size={18} /></span><div><h2>About Kakeibo</h2><small>Its roots, purpose, and categories</small></div><ChevronRight size={18} className={`chev ${settingsOpen.about ? 'open' : ''}`} /></header>{settingsOpen.about && <button className="settings-link" onClick={onAbout}><span><b>Explore Kakeibo</b><small>Open the illustrated guide and monthly practice.</small></span><ChevronRight size={18} /></button>}</section>
     <section className="panel settings-group demo-setting"><header className="settings-header-clickable" onClick={() => toggle('demo')}><span className="settings-icon"><CircleHelp size={18} /></span><div><h2>Trying things out?</h2><small>Demo data stays local and is easy to remove.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.demo ? 'open' : ''}`} /></header>{settingsOpen.demo && <div className="settings-row"><span>Seed sample expenses</span><Toggle checked={settings.demoEnabled} onChange={(v) => onDemoChange(v)} /></div>}</section>
     <p className="settings-note">No account. No cloud. Your financial life stays on this device.</p>

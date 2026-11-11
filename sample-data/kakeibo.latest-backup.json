@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "exportedAt": "2026-11-04T03:48:17.370Z",
+  "tables": {
+    "expenses": [
+      {
+        "amount": 220,
+        "category": "Culture",
+        "pause": "Needed it",
+        "date": "2026-10-23T09:00:00.000Z",
+        "note": "Online course",
+        "demo": true,
+        "id": "5f981201-eb9e-42ce-a352-e9dc79251e05",
+        "createdAt": "2026-11-04T03:48:12.634Z",
+        "updatedAt": "2026-11-04T03:48:12.634Z",
+        "deletedAt": null
+      },
+      {
+        "amount": 120,
+        "category": "Extra",
+        "pause": "Regret",
+        "date": "2026-10-25T09:00:00.000Z",
+        "note": "Unexpected repair",
+        "demo": true,
+        "id": "83112423-4ad4-4c2f-9e49-21e2a09a7653",
+        "createdAt": "2026-11-04T03:48:12.630Z",
+        "updatedAt": "2026-11-04T03:48:12.630Z",
+        "deletedAt": null
+      },
+      {
+        "amount": 180,
+        "category": "Culture",
+        "pause": "Wanted it",
+        "date": "2026-11-01T09:00:00.000Z",
+        "note": "A new book",
+        "demo": true,
+        "id": "bad7a80c-b72d-4f42-97f1-ba12e88f33e7",
+        "createdAt": "2026-11-04T03:48:12.621Z",
+        "updatedAt": "2026-11-04T03:48:12.621Z",
+        "deletedAt": null
+      },
+      {
+        "amount": 95,
+        "category": "Optional",
+        "pause": "Wanted it",
+        "date": "2026-10-30T09:00:00.000Z",
+        "note": "Coffee with a friend",
+        "demo": true,
+        "id": "c6fe0a1e-add7-4092-8a5c-9108b0ccef30",
+        "createdAt": "2026-11-04T03:48:12.625Z",
+        "updatedAt": "2026-11-04T03:48:12.625Z",
+        "deletedAt": null
+      },
+      {
+        "amount": 260,
+        "category": "Survival",
+        "pause": "Needed it",
+        "date": "2026-10-27T09:00:00.000Z",
+        "note": "Transport",
+        "demo": true,
+        "id": "cb466f8c-2baa-4117-b669-172d184fc46b",
+        "createdAt": "2026-11-04T03:48:12.627Z",
+        "updatedAt": "2026-11-04T03:48:12.627Z",
+        "deletedAt": null
+      },
+      {
+        "amount": 460,
+        "category": "Survival",
+        "pause": "Needed it",
+        "date": "2026-11-03T09:00:00.000Z",
+        "note": "Groceries",
+        "demo": true,
+        "id": "dc0b5b56-2809-4a14-93e7-a405bf716c1c",
+        "createdAt": "2026-11-04T03:48:12.613Z",
+        "updatedAt": "2026-11-04T03:48:12.613Z",
+        "deletedAt": null
+      }
+    ],
+    "plans": [
+      {
+        "income": 12000,
+        "fixed": 3200,
+        "savingsTarget": 1500,
+        "id": "2026-11",
+        "updatedAt": "2026-11-04T03:48:12.637Z"
+      }
+    ],
+    "reflections": [],
+    "settings": [
+      {
+        "id": "app",
+        "currency": "ETB",
+        "monthStartDay": 1,
+        "theme": "light",
+        "language": "en",
+        "categories": [
+          {
+            "id": "survival",
+            "name": "Survival",
+            "icon": "House",
+            "color": "#A8B9A5",
+            "archived": false
+          },
+          {
+            "id": "optional",
+            "name": "Optional",
+            "icon": "Sparkles",
+            "color": "#D8B68A",
+            "archived": false
+          },
+          {
+            "id": "culture",
+            "name": "Culture",
+            "icon": "BookOpen",
+            "color": "#A8ACCB",
+            "archived": false
+          },
+          {
+            "id": "extra",
+            "name": "Extra",
+            "icon": "Umbrella",
+            "color": "#D39A8B",
+            "archived": false
+          }
+        ],
+        "demoEnabled": true,
+        "onboarded": false
+      }
+    ],
+    "audit": [
+      {
+        "entity": "expense",
+        "entityId": "83112423-4ad4-4c2f-9e49-21e2a09a7653",
+        "action": "created",
+        "summary": "Added Extra expense · 120",
+        "data": "{\"amount\":120,\"category\":\"Extra\",\"pause\":\"Regret\",\"date\":\"2026-10-25T09:00:00.000Z\",\"note\":\"Unexpected repair\",\"demo\":true,\"id\":\"83112423-4ad4-4c2f-9e49-21e2a09a7653\",\"createdAt\":\"2026-11-04T03:48:12.630Z\",\"updatedAt\":\"2026-11-04T03:48:12.630Z\",\"deletedAt\":null}",
+        "id": "519b5dfe-f4f4-4727-809a-eb1553b35785",
+        "timestamp": "2026-11-04T03:48:12.633Z"
+      },
+      {
+        "entity": "plan",
+        "entityId": "2026-11",
+        "action": "created",
+        "summary": "Created 2026-11 monthly plan",
+        "data": "{\"income\":12000,\"fixed\":3200,\"savingsTarget\":1500,\"id\":\"2026-11\",\"updatedAt\":\"2026-11-04T03:48:12.637Z\"}",
+        "id": "73b0f2ff-25cf-418a-907a-5d7ff02071a1",
+        "timestamp": "2026-11-04T03:48:12.639Z"
+      },
+      {
+        "entity": "expense",
+        "entityId": "5f981201-eb9e-42ce-a352-e9dc79251e05",
+        "action": "created",
+        "summary": "Added Culture expense · 220",
+        "data": "{\"amount\":220,\"category\":\"Culture\",\"pause\":\"Needed it\",\"date\":\"2026-10-23T09:00:00.000Z\",\"note\":\"Online course\",\"demo\":true,\"id\":\"5f981201-eb9e-42ce-a352-e9dc79251e05\",\"createdAt\":\"2026-11-04T03:48:12.634Z\",\"updatedAt\":\"2026-11-04T03:48:12.634Z\",\"deletedAt\":null}",
+        "id": "77b9bd0e-ffa3-4af5-aa83-9187bda8da7f",
+        "timestamp": "2026-11-04T03:48:12.636Z"
+      },
+      {
+        "entity": "expense",
+        "entityId": "cb466f8c-2baa-4117-b669-172d184fc46b",
+        "action": "created",
+        "summary": "Added Survival expense · 260",
+        "data": "{\"amount\":260,\"category\":\"Survival\",\"pause\":\"Needed it\",\"date\":\"2026-10-27T09:00:00.000Z\",\"note\":\"Transport\",\"demo\":true,\"id\":\"cb466f8c-2baa-4117-b669-172d184fc46b\",\"createdAt\":\"2026-11-04T03:48:12.627Z\",\"updatedAt\":\"2026-11-04T03:48:12.627Z\",\"deletedAt\":null}",
+        "id": "add9ab0e-ff5d-41c3-be70-f11b1e144069",
+        "timestamp": "2026-11-04T03:48:12.629Z"
+      },
+      {
+        "entity": "settings",
+        "entityId": "app",
+        "action": "updated",
+        "summary": "Updated settings",
+        "data": "{\"id\":\"app\",\"currency\":\"ETB\",\"monthStartDay\":1,\"theme\":\"light\",\"language\":\"en\",\"categories\":[{\"id\":\"survival\",\"name\":\"Survival\",\"icon\":\"House\",\"color\":\"#A8B9A5\",\"archived\":false},{\"id\":\"optional\",\"name\":\"Optional\",\"icon\":\"Sparkles\",\"color\":\"#D8B68A\",\"archived\":false},{\"id\":\"culture\",\"name\":\"Culture\",\"icon\":\"BookOpen\",\"color\":\"#A8ACCB\",\"archived\":false},{\"id\":\"extra\",\"name\":\"Extra\",\"icon\":\"Umbrella\",\"color\":\"#D39A8B\",\"archived\":false}],\"demoEnabled\":true,\"onboarded\":false}",
+        "id": "b9604e10-4936-43bb-9cde-f7f3a77a17ac",
+        "timestamp": "2026-11-04T03:48:12.643Z"
+      },
+      {
+        "entity": "expense",
+        "entityId": "dc0b5b56-2809-4a14-93e7-a405bf716c1c",
+        "action": "created",
+        "summary": "Added Survival expense · 460",
+        "data": "{\"amount\":460,\"category\":\"Survival\",\"pause\":\"Needed it\",\"date\":\"2026-11-03T09:00:00.000Z\",\"note\":\"Groceries\",\"demo\":true,\"id\":\"dc0b5b56-2809-4a14-93e7-a405bf716c1c\",\"createdAt\":\"2026-11-04T03:48:12.613Z\",\"updatedAt\":\"2026-11-04T03:48:12.613Z\",\"deletedAt\":null}",
+        "id": "c1a0fba3-df5c-43d8-b6d6-b6a78f769645",
+        "timestamp": "2026-11-04T03:48:12.619Z"
+      },
+      {
+        "entity": "expense",
+        "entityId": "c6fe0a1e-add7-4092-8a5c-9108b0ccef30",
+        "action": "created",
+        "summary": "Added Optional expense · 95",
+        "data": "{\"amount\":95,\"category\":\"Optional\",\"pause\":\"Wanted it\",\"date\":\"2026-10-30T09:00:00.000Z\",\"note\":\"Coffee with a friend\",\"demo\":true,\"id\":\"c6fe0a1e-add7-4092-8a5c-9108b0ccef30\",\"createdAt\":\"2026-11-04T03:48:12.625Z\",\"updatedAt\":\"2026-11-04T03:48:12.625Z\",\"deletedAt\":null}",
+        "id": "d3ee8590-fa61-4bcd-993b-4aecc8bec05a",
+        "timestamp": "2026-11-04T03:48:12.626Z"
+      },
+      {
+        "entity": "expense",
+        "entityId": "bad7a80c-b72d-4f42-97f1-ba12e88f33e7",
+        "action": "created",
+        "summary": "Added Culture expense · 180",
+        "data": "{\"amount\":180,\"category\":\"Culture\",\"pause\":\"Wanted it\",\"date\":\"2026-11-01T09:00:00.000Z\",\"note\":\"A new book\",\"demo\":true,\"id\":\"bad7a80c-b72d-4f42-97f1-ba12e88f33e7\",\"createdAt\":\"2026-11-04T03:48:12.621Z\",\"updatedAt\":\"2026-11-04T03:48:12.621Z\",\"deletedAt\":null}",
+        "id": "fd632fdd-fbb5-48dd-8f61-f29b863ee2d5",
+        "timestamp": "2026-11-04T03:48:12.623Z"
+      }
+    ]
+  }
+}

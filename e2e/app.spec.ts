@@ -346,7 +346,11 @@ test.describe('Kakeibo app', () => {
 
     await page.locator('.side-nav button', { hasText: 'Settings' }).click()
     await page.getByRole('heading', { name: 'Your data' }).click()
-    await page.locator('.data-actions input[type="file"]').setInputFiles(backupPath)
+    await page.getByRole('button', { name: 'Restore backup', exact: true }).click()
+    const modal = page.getByRole('dialog', { name: 'Restore backup' })
+    await expect(modal).toBeVisible()
+    await modal.locator('input[type="file"]').setInputFiles(backupPath)
+    await modal.getByRole('button', { name: 'Restore backup', exact: true }).click()
     const restore = page.getByRole('alertdialog', { name: 'Restore this backup?' })
     await expect(restore).toBeVisible()
     await restore.getByRole('button', { name: 'Restore backup', exact: true }).click()
@@ -355,6 +359,30 @@ test.describe('Kakeibo app', () => {
     const restored = page.locator('.recent-panel .expense-row').first()
     await expect(restored).toContainText('Megenagna → Bole')
     await expect(restored).toContainText('4 people')
+  })
+
+  test('restores backup from pasted JSON in the restore modal', async ({ page }) => {
+    await completeOnboarding(page)
+    await addExpense(page, '42')
+    const backupJson = await writeJsonFile('kakeibo-e2e-paste-backup', {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      tables: {
+        expenses: [{ id: 'paste-1', amount: 99, category: 'Culture', date: '2026-11-08', note: 'From paste' }],
+      },
+    })
+    const pasted = await readFile(backupJson, 'utf8')
+
+    await page.locator('.side-nav button', { hasText: 'Settings' }).click()
+    await page.getByRole('heading', { name: 'Your data' }).click()
+    await page.getByRole('button', { name: 'Restore backup', exact: true }).click()
+    const modal = page.getByRole('dialog', { name: 'Restore backup' })
+    await modal.locator('#restore-backup-json').fill(pasted)
+    await modal.getByRole('button', { name: 'Restore backup', exact: true }).click()
+    await page.getByRole('alertdialog', { name: 'Restore this backup?' }).getByRole('button', { name: 'Restore backup', exact: true }).click()
+    await expect(page.getByRole('status')).toContainText('Backup restored')
+    await page.locator('.side-nav button', { hasText: 'Home' }).click()
+    await expect(page.locator('.recent-panel .expense-row').first()).toContainText('From paste')
   })
 
   test('notification routes open the add form or the report screen', async ({ page }) => {

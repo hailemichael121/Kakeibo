@@ -1,10 +1,10 @@
 {
   "name": "kakeibo",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Mindful offline-first personal budgeting",
   "author": "Kakeibo",
-  "homepage": "https://example.com/kakeibo",
+  "homepage": "https://github.com/hailemichael121/Kakeibo",
   "desktopName": "kakeibo.desktop",
   "type": "module",
   "scripts": {
@@ -23,6 +23,7 @@
     "android:open": "npx cap open android",
     "android:assemble": "cd android && ./gradlew assembleDebug",
     "android:install": "npm run build:mobile && cd android && ./gradlew installDebug",
+    "mobile:install": "npm run android:install",
     "android:release": "npm run build:mobile && cd android && ./gradlew assembleRelease",
     "electron": "node desktop/dev.mjs",
     "desktop:dev": "node desktop/dev.mjs",
@@ -38,6 +39,7 @@
     "release:mobile": "npm run build:mobile && cd android && ./gradlew assembleRelease",
     "typecheck": "tsc --noEmit",
     "data:import": "node scripts/import-data.mjs",
+    "update": "node scripts/desktop-update.mjs",
     "serve:web": "npm run build && node scripts/publish-web.mjs && python3 -m http.server 4319 --bind 127.0.0.1"
   },
   "dependencies": {
