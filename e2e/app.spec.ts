@@ -385,6 +385,36 @@ test.describe('Kakeibo app', () => {
     await expect(page.locator('.recent-panel .expense-row').first()).toContainText('From paste')
   })
 
+  test('restores an expenses JSON file and skips onboarding', async ({ page }) => {
+    await page.goto('/')
+    await waitForApp(page)
+    await expect(page.getByText('Welcome to Kakeibo')).toBeVisible()
+
+    const payload = {
+      currency: 'ETB',
+      period: { startDay: 30, endDay: 2, label: 'Salary cycle' },
+      plan: { income: 15000, fixed: 2500, savingsTarget: null },
+      expenses: [
+        { amount: 300, category: 'Optional', date: currentMonthDate(9), note: 'Metshaf gift' },
+        { amount: 45, category: 'Survival', date: currentMonthDate(10), note: 'Taxi to work', to: 'Work', peopleCount: 1 },
+      ],
+    }
+
+    await page.locator('.side-nav button', { hasText: 'Settings' }).click()
+    await page.getByRole('heading', { name: 'Your data' }).click()
+    await page.getByRole('button', { name: 'Restore backup', exact: true }).click()
+    const modal = page.getByRole('dialog', { name: 'Restore backup' })
+    await modal.locator('#restore-backup-json').fill(JSON.stringify(payload))
+    await modal.getByRole('button', { name: 'Restore backup', exact: true }).click()
+    await page.getByRole('alertdialog', { name: 'Restore from expense data?' }).getByRole('button', { name: 'Restore backup', exact: true }).click()
+    await expect(page.getByRole('status')).toContainText('Expenses restored')
+
+    await page.locator('.side-nav button', { hasText: 'Home' }).click()
+    await expect(page.locator('.onboarding-card')).toHaveCount(0)
+    await expect(page.locator('.recent-panel .expense-row', { hasText: 'Metshaf gift' })).toBeVisible()
+    await expect(page.locator('.recent-panel .expense-row', { hasText: 'Work' })).toContainText('1 person')
+  })
+
   test('notification routes open the add form or the report screen', async ({ page }) => {
     await page.goto('/?route=add')
     await waitForApp(page)

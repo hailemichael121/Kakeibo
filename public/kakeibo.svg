@@ -1,3 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768 768">
-  <image href="./kakeibo.png" width="768" height="768" preserveAspectRatio="xMidYMid meet" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#F3F1EB"/>
+  <rect x="56" y="56" width="400" height="400" rx="144" fill="#E4E9E1" stroke="rgba(52,61,53,.12)" stroke-width="4"/>
+  <image href="kakeibo.png" x="112" y="112" width="288" height="288" preserveAspectRatio="xMidYMid meet" />
 </svg>

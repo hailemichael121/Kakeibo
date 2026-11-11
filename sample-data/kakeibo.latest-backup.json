@@ -1,96 +1,207 @@
 {
   "version": 1,
-  "exportedAt": "2026-11-04T03:48:17.370Z",
+  "exportedAt": "2026-11-11T14:41:10.798Z",
   "tables": {
     "expenses": [
       {
-        "amount": 220,
-        "category": "Culture",
-        "pause": "Needed it",
-        "date": "2026-10-23T09:00:00.000Z",
-        "note": "Online course",
-        "demo": true,
-        "id": "5f981201-eb9e-42ce-a352-e9dc79251e05",
-        "createdAt": "2026-11-04T03:48:12.634Z",
-        "updatedAt": "2026-11-04T03:48:12.634Z",
-        "deletedAt": null
-      },
-      {
-        "amount": 120,
-        "category": "Extra",
-        "pause": "Regret",
-        "date": "2026-10-25T09:00:00.000Z",
-        "note": "Unexpected repair",
-        "demo": true,
-        "id": "83112423-4ad4-4c2f-9e49-21e2a09a7653",
-        "createdAt": "2026-11-04T03:48:12.630Z",
-        "updatedAt": "2026-11-04T03:48:12.630Z",
-        "deletedAt": null
-      },
-      {
-        "amount": 180,
-        "category": "Culture",
-        "pause": "Wanted it",
-        "date": "2026-11-01T09:00:00.000Z",
-        "note": "A new book",
-        "demo": true,
-        "id": "bad7a80c-b72d-4f42-97f1-ba12e88f33e7",
-        "createdAt": "2026-11-04T03:48:12.621Z",
-        "updatedAt": "2026-11-04T03:48:12.621Z",
-        "deletedAt": null
-      },
-      {
-        "amount": 95,
+        "id": "21a6ec30-4670-45e2-8632-d8a8a604aeb2",
+        "amount": 300,
         "category": "Optional",
-        "pause": "Wanted it",
-        "date": "2026-10-30T09:00:00.000Z",
-        "note": "Coffee with a friend",
-        "demo": true,
-        "id": "c6fe0a1e-add7-4092-8a5c-9108b0ccef30",
-        "createdAt": "2026-11-04T03:48:12.625Z",
-        "updatedAt": "2026-11-04T03:48:12.625Z",
+        "pause": null,
+        "date": "2026-11-09T09:00:00.000Z",
+        "note": "Metshaf gift",
+        "from": null,
+        "to": null,
+        "peopleCount": null,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
         "deletedAt": null
       },
       {
+        "id": "36604982-60f3-4494-93a5-8d2ae2e4d234",
+        "amount": 400,
+        "category": "Survival",
+        "pause": null,
+        "date": "2026-11-09T09:00:00.000Z",
+        "note": "Lunch for me and Bati",
+        "from": null,
+        "to": null,
+        "peopleCount": 2,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
+        "deletedAt": null
+      },
+      {
+        "id": "465aac8a-a778-4f80-ae08-4832f26cbf52",
+        "amount": 50,
+        "category": "Survival",
+        "pause": null,
+        "date": "2026-11-09T09:00:00.000Z",
+        "note": "Tip to waiter",
+        "from": null,
+        "to": null,
+        "peopleCount": null,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
+        "deletedAt": null
+      },
+      {
+        "id": "ff2eff16-40a6-45c1-bf60-464a51dd2378",
+        "amount": 45,
+        "category": "Survival",
+        "pause": null,
+        "date": "2026-11-09T09:00:00.000Z",
+        "note": "Taxi to work",
+        "from": null,
+        "to": "Work",
+        "peopleCount": 1,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
+        "deletedAt": null
+      },
+      {
+        "id": "6c39fa33-cbac-45f0-b0ef-5ea6ed5d6eb6",
+        "amount": 50,
+        "category": "Survival",
+        "pause": null,
+        "date": "2026-11-09T09:00:00.000Z",
+        "note": "Taxi from work",
+        "from": "Work",
+        "to": null,
+        "peopleCount": null,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
+        "deletedAt": null
+      },
+      {
+        "id": "ed1f1d7b-27bb-4bd7-8280-b257a743041e",
+        "amount": 37,
+        "category": "Survival",
+        "pause": null,
+        "date": "2026-11-09T09:00:00.000Z",
+        "note": "Internet package",
+        "from": null,
+        "to": null,
+        "peopleCount": null,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
+        "deletedAt": null
+      },
+      {
+        "id": "882b5723-5d4c-4431-b1c1-2d0bc3bfddac",
         "amount": 260,
-        "category": "Survival",
-        "pause": "Needed it",
-        "date": "2026-10-27T09:00:00.000Z",
-        "note": "Transport",
-        "demo": true,
-        "id": "cb466f8c-2baa-4117-b669-172d184fc46b",
-        "createdAt": "2026-11-04T03:48:12.627Z",
-        "updatedAt": "2026-11-04T03:48:12.627Z",
+        "category": "Optional",
+        "pause": null,
+        "date": "2026-11-09T09:00:00.000Z",
+        "note": "Yusuf - buying goods",
+        "from": null,
+        "to": null,
+        "peopleCount": null,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
         "deletedAt": null
       },
       {
-        "amount": 460,
+        "id": "536fe9d1-f701-495d-9454-6709d7622063",
+        "amount": 1200,
+        "category": "Optional",
+        "pause": null,
+        "date": "2026-11-10T09:00:00.000Z",
+        "note": "Sent to Senait for family gathering payment",
+        "from": null,
+        "to": null,
+        "peopleCount": null,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
+        "deletedAt": null
+      },
+      {
+        "id": "896edd58-2040-47a3-bc74-bdc7221715d0",
+        "amount": 200,
         "category": "Survival",
-        "pause": "Needed it",
-        "date": "2026-11-03T09:00:00.000Z",
-        "note": "Groceries",
-        "demo": true,
-        "id": "dc0b5b56-2809-4a14-93e7-a405bf716c1c",
-        "createdAt": "2026-11-04T03:48:12.613Z",
-        "updatedAt": "2026-11-04T03:48:12.613Z",
+        "pause": null,
+        "date": "2026-11-10T09:00:00.000Z",
+        "note": "Taxi for Tigist, children, Meles and others",
+        "from": null,
+        "to": "Mexico",
+        "peopleCount": null,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
+        "deletedAt": null
+      },
+      {
+        "id": "54ce539d-9948-40ce-bd06-f7bb72b6f076",
+        "amount": 25,
+        "category": "Survival",
+        "pause": null,
+        "date": "2026-11-10T09:00:00.000Z",
+        "note": "Internet package",
+        "from": null,
+        "to": null,
+        "peopleCount": null,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
+        "deletedAt": null
+      },
+      {
+        "id": "e586c51e-ca30-403f-b0a7-081eaeafd047",
+        "amount": 20,
+        "category": "Survival",
+        "pause": null,
+        "date": "2026-11-10T09:00:00.000Z",
+        "note": "Taxi from Mexico to home",
+        "from": "Mexico",
+        "to": "Home",
+        "peopleCount": null,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
+        "deletedAt": null
+      },
+      {
+        "id": "647257bc-8ddf-4a80-bd2b-ea4619a4c594",
+        "amount": 50,
+        "category": "Survival",
+        "pause": null,
+        "date": "2026-11-10T09:00:00.000Z",
+        "note": "Two injera for dinner and breakfast",
+        "from": null,
+        "to": null,
+        "peopleCount": null,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
+        "deletedAt": null
+      },
+      {
+        "id": "5d87b20c-6d87-4cf3-964b-d582574f126e",
+        "amount": 45,
+        "category": "Survival",
+        "pause": null,
+        "date": "2026-11-11T09:00:00.000Z",
+        "note": "Taxi to work",
+        "from": null,
+        "to": "Work",
+        "peopleCount": 1,
+        "createdAt": "2026-11-11T14:41:10.798Z",
+        "updatedAt": "2026-11-11T14:41:10.798Z",
         "deletedAt": null
       }
     ],
     "plans": [
       {
-        "income": 12000,
-        "fixed": 3200,
-        "savingsTarget": 1500,
-        "id": "2026-11",
-        "updatedAt": "2026-11-04T03:48:12.637Z"
+        "id": "2026-10",
+        "income": 0,
+        "fixed": 0,
+        "savingsTarget": null,
+        "updatedAt": "2026-11-11T14:41:10.798Z"
       }
     ],
     "reflections": [],
+    "journals": [],
     "settings": [
       {
         "id": "app",
         "currency": "ETB",
-        "monthStartDay": 1,
+        "monthStartDay": 30,
         "theme": "light",
         "language": "en",
         "categories": [
@@ -104,7 +215,7 @@
           {
             "id": "optional",
             "name": "Optional",
-            "icon": "Sparkles",
+            "icon": "ShoppingBag",
             "color": "#D8B68A",
             "archived": false
           },
@@ -123,83 +234,16 @@
             "archived": false
           }
         ],
-        "demoEnabled": true,
-        "onboarded": false
+        "demoEnabled": false,
+        "onboarded": true,
+        "remindersEnabled": true,
+        "reminderMiddayTime": "12:00",
+        "reminderNightTime": "21:00",
+        "reminderWeeklyEnabled": true,
+        "reminderWeeklyDay": 0,
+        "updatedAt": "2026-11-11T14:41:10.798Z"
       }
     ],
-    "audit": [
-      {
-        "entity": "expense",
-        "entityId": "83112423-4ad4-4c2f-9e49-21e2a09a7653",
-        "action": "created",
-        "summary": "Added Extra expense · 120",
-        "data": "{\"amount\":120,\"category\":\"Extra\",\"pause\":\"Regret\",\"date\":\"2026-10-25T09:00:00.000Z\",\"note\":\"Unexpected repair\",\"demo\":true,\"id\":\"83112423-4ad4-4c2f-9e49-21e2a09a7653\",\"createdAt\":\"2026-11-04T03:48:12.630Z\",\"updatedAt\":\"2026-11-04T03:48:12.630Z\",\"deletedAt\":null}",
-        "id": "519b5dfe-f4f4-4727-809a-eb1553b35785",
-        "timestamp": "2026-11-04T03:48:12.633Z"
-      },
-      {
-        "entity": "plan",
-        "entityId": "2026-11",
-        "action": "created",
-        "summary": "Created 2026-11 monthly plan",
-        "data": "{\"income\":12000,\"fixed\":3200,\"savingsTarget\":1500,\"id\":\"2026-11\",\"updatedAt\":\"2026-11-04T03:48:12.637Z\"}",
-        "id": "73b0f2ff-25cf-418a-907a-5d7ff02071a1",
-        "timestamp": "2026-11-04T03:48:12.639Z"
-      },
-      {
-        "entity": "expense",
-        "entityId": "5f981201-eb9e-42ce-a352-e9dc79251e05",
-        "action": "created",
-        "summary": "Added Culture expense · 220",
-        "data": "{\"amount\":220,\"category\":\"Culture\",\"pause\":\"Needed it\",\"date\":\"2026-10-23T09:00:00.000Z\",\"note\":\"Online course\",\"demo\":true,\"id\":\"5f981201-eb9e-42ce-a352-e9dc79251e05\",\"createdAt\":\"2026-11-04T03:48:12.634Z\",\"updatedAt\":\"2026-11-04T03:48:12.634Z\",\"deletedAt\":null}",
-        "id": "77b9bd0e-ffa3-4af5-aa83-9187bda8da7f",
-        "timestamp": "2026-11-04T03:48:12.636Z"
-      },
-      {
-        "entity": "expense",
-        "entityId": "cb466f8c-2baa-4117-b669-172d184fc46b",
-        "action": "created",
-        "summary": "Added Survival expense · 260",
-        "data": "{\"amount\":260,\"category\":\"Survival\",\"pause\":\"Needed it\",\"date\":\"2026-10-27T09:00:00.000Z\",\"note\":\"Transport\",\"demo\":true,\"id\":\"cb466f8c-2baa-4117-b669-172d184fc46b\",\"createdAt\":\"2026-11-04T03:48:12.627Z\",\"updatedAt\":\"2026-11-04T03:48:12.627Z\",\"deletedAt\":null}",
-        "id": "add9ab0e-ff5d-41c3-be70-f11b1e144069",
-        "timestamp": "2026-11-04T03:48:12.629Z"
-      },
-      {
-        "entity": "settings",
-        "entityId": "app",
-        "action": "updated",
-        "summary": "Updated settings",
-        "data": "{\"id\":\"app\",\"currency\":\"ETB\",\"monthStartDay\":1,\"theme\":\"light\",\"language\":\"en\",\"categories\":[{\"id\":\"survival\",\"name\":\"Survival\",\"icon\":\"House\",\"color\":\"#A8B9A5\",\"archived\":false},{\"id\":\"optional\",\"name\":\"Optional\",\"icon\":\"Sparkles\",\"color\":\"#D8B68A\",\"archived\":false},{\"id\":\"culture\",\"name\":\"Culture\",\"icon\":\"BookOpen\",\"color\":\"#A8ACCB\",\"archived\":false},{\"id\":\"extra\",\"name\":\"Extra\",\"icon\":\"Umbrella\",\"color\":\"#D39A8B\",\"archived\":false}],\"demoEnabled\":true,\"onboarded\":false}",
-        "id": "b9604e10-4936-43bb-9cde-f7f3a77a17ac",
-        "timestamp": "2026-11-04T03:48:12.643Z"
-      },
-      {
-        "entity": "expense",
-        "entityId": "dc0b5b56-2809-4a14-93e7-a405bf716c1c",
-        "action": "created",
-        "summary": "Added Survival expense · 460",
-        "data": "{\"amount\":460,\"category\":\"Survival\",\"pause\":\"Needed it\",\"date\":\"2026-11-03T09:00:00.000Z\",\"note\":\"Groceries\",\"demo\":true,\"id\":\"dc0b5b56-2809-4a14-93e7-a405bf716c1c\",\"createdAt\":\"2026-11-04T03:48:12.613Z\",\"updatedAt\":\"2026-11-04T03:48:12.613Z\",\"deletedAt\":null}",
-        "id": "c1a0fba3-df5c-43d8-b6d6-b6a78f769645",
-        "timestamp": "2026-11-04T03:48:12.619Z"
-      },
-      {
-        "entity": "expense",
-        "entityId": "c6fe0a1e-add7-4092-8a5c-9108b0ccef30",
-        "action": "created",
-        "summary": "Added Optional expense · 95",
-        "data": "{\"amount\":95,\"category\":\"Optional\",\"pause\":\"Wanted it\",\"date\":\"2026-10-30T09:00:00.000Z\",\"note\":\"Coffee with a friend\",\"demo\":true,\"id\":\"c6fe0a1e-add7-4092-8a5c-9108b0ccef30\",\"createdAt\":\"2026-11-04T03:48:12.625Z\",\"updatedAt\":\"2026-11-04T03:48:12.625Z\",\"deletedAt\":null}",
-        "id": "d3ee8590-fa61-4bcd-993b-4aecc8bec05a",
-        "timestamp": "2026-11-04T03:48:12.626Z"
-      },
-      {
-        "entity": "expense",
-        "entityId": "bad7a80c-b72d-4f42-97f1-ba12e88f33e7",
-        "action": "created",
-        "summary": "Added Culture expense · 180",
-        "data": "{\"amount\":180,\"category\":\"Culture\",\"pause\":\"Wanted it\",\"date\":\"2026-11-01T09:00:00.000Z\",\"note\":\"A new book\",\"demo\":true,\"id\":\"bad7a80c-b72d-4f42-97f1-ba12e88f33e7\",\"createdAt\":\"2026-11-04T03:48:12.621Z\",\"updatedAt\":\"2026-11-04T03:48:12.621Z\",\"deletedAt\":null}",
-        "id": "fd632fdd-fbb5-48dd-8f61-f29b863ee2d5",
-        "timestamp": "2026-11-04T03:48:12.623Z"
-      }
-    ]
+    "audit": []
   }
 }

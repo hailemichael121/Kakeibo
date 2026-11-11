@@ -1,0 +1,28 @@
+{
+  "currency": "ETB",
+  "period": {
+    "startDay": 30,
+    "endDay": 2,
+    "label": "Salary cycle"
+  },
+  "plan": {
+    "income": 0,
+    "fixed": 0,
+    "savingsTarget": null
+  },
+  "expenses": [
+    { "amount": 300, "category": "Optional", "date": "2026-11-09", "note": "Metshaf gift" },
+    { "amount": 400, "category": "Survival", "date": "2026-11-09", "note": "Lunch for me and Bati", "peopleCount": 2 },
+    { "amount": 50, "category": "Survival", "date": "2026-11-09", "note": "Tip to waiter" },
+    { "amount": 45, "category": "Survival", "date": "2026-11-09", "note": "Taxi to work", "to": "Work", "peopleCount": 1 },
+    { "amount": 50, "category": "Survival", "date": "2026-11-09", "note": "Taxi from work", "from": "Work" },
+    { "amount": 37, "category": "Survival", "date": "2026-11-09", "note": "Internet package" },
+    { "amount": 260, "category": "Optional", "date": "2026-11-09", "note": "Yusuf - buying goods" },
+    { "amount": 1200, "category": "Optional", "date": "2026-11-10", "note": "Sent to Senait for family gathering payment" },
+    { "amount": 200, "category": "Survival", "date": "2026-11-10", "note": "Taxi for Tigist, children, Meles and others", "to": "Mexico" },
+    { "amount": 25, "category": "Survival", "date": "2026-11-10", "note": "Internet package" },
+    { "amount": 20, "category": "Survival", "date": "2026-11-10", "note": "Taxi from Mexico to home", "from": "Mexico", "to": "Home" },
+    { "amount": 50, "category": "Survival", "date": "2026-11-10", "note": "Two injera for dinner and breakfast" },
+    { "amount": 45, "category": "Survival", "date": "2026-11-11", "note": "Taxi to work", "to": "Work", "peopleCount": 1 }
+  ]
+}

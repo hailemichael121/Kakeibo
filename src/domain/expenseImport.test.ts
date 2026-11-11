@@ -193,6 +193,19 @@ describe('parseExpenseJson', () => {
     expect(result.needsPeriod).toBe(true)
   })
 
+  it('skips transactions marked as excluded from totals', () => {
+    const result = parseExpenseJson(JSON.stringify({
+      transactions: [
+        { amount: 45, category: 'Transport', day: 1, includeInTotals: false },
+        { amount: 50, category: 'Survival', date: '2026-11-10' },
+      ],
+    }), { periodStart: '2026-10-30', periodEnd: '2026-11-02' })
+
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0]?.amount).toBe(50)
+    expect(result.skipped).toBe(1)
+  })
+
   it('rejects malformed JSON and unsupported structures', () => {
     expect(() => parseExpenseJson('{')).toThrow('could not be read')
     expect(() => parseExpenseJson(JSON.stringify({ rows: [] }))).toThrow('needs an array')

@@ -12,6 +12,7 @@ import { ensureSettings, deleteExpense, recordAudit, resetAllData, restoreExpens
 import { calculateBudget, categoryPercent } from '@/domain/budget'
 import { getBudgetCalendarDates, localDateKey, summarizeExpensesByLocalDay } from '@/domain/calendar'
 import { parseAmount } from '@/domain/amount'
+import { normalizeRestoredSettings, parseBackupText } from '@/domain/backupRestore'
 import { expenseSignature, normalizeImportCategory, normalizeImportDate, normalizeImportId, normalizeImportPause, normalizeImportPeople, normalizeImportText, parseExpenseJson, type ExpenseImportIssue, type ExpenseImportResult, type ExpenseImportRow as ImportRow } from '@/domain/expenseImport'
 import { DEMO_EXPENSES } from '@/fixtures/demo'
 import { shareBytes } from '@/services/share'
@@ -85,24 +86,30 @@ export function App() {
   const widgetQuickAdd = useMemo(() => launchParams.has('widgetQuickAdd'), [launchParams])
   const [widgetNudgeVisible, setWidgetNudgeVisible] = useState(() => canAddHomeWidget() && window.localStorage.getItem('kakeibo.widgetNudgeSeen') !== '1')
 
-  const refresh = useCallback(async () => {
-    const [nextSettings, allExpenses, monthPlan, logs, allPlans] = await Promise.all([
-      ensureSettings(), db.expenses.toArray(), db.plans.get(month), db.audit.orderBy('timestamp').reverse().toArray(), db.plans.toArray(),
-    ])
+  const refresh = useCallback(async (options?: { realignMonth?: boolean }) => {
+    const nextSettings = await ensureSettings()
+    const currentMonth = monthKey(new Date(), nextSettings.monthStartDay)
+    let viewMonth = month
     if (!initializedMonth.current) {
       initializedMonth.current = true
-      const currentMonth = monthKey(new Date(), nextSettings.monthStartDay)
+      viewMonth = currentMonth
       if (currentMonth !== month) setMonth(currentMonth)
+    } else if (options?.realignMonth && currentMonth !== month) {
+      viewMonth = currentMonth
+      setMonth(currentMonth)
     }
+    const [allExpenses, monthPlan, logs, allPlans] = await Promise.all([
+      db.expenses.toArray(), db.plans.get(viewMonth), db.audit.orderBy('timestamp').reverse().toArray(), db.plans.toArray(),
+    ])
     setSettings(nextSettings)
-    const activeMonthExpenses = allExpenses.filter((expense) => !expense.deletedAt && monthKey(new Date(expense.date), nextSettings.monthStartDay) === month)
+    const activeMonthExpenses = allExpenses.filter((expense) => !expense.deletedAt && monthKey(new Date(expense.date), nextSettings.monthStartDay) === viewMonth)
     setExpenses(activeMonthExpenses.sort((a, b) => b.date.localeCompare(a.date)))
-    const [year, selectedMonth] = month.split('-').map(Number)
+    const [year, selectedMonth] = viewMonth.split('-').map(Number)
     const priorMonth = monthKey(new Date(year, selectedMonth - 2, nextSettings.monthStartDay), nextSettings.monthStartDay)
     const earlierTracked = allExpenses.filter((expense) => !expense.deletedAt && monthKey(new Date(expense.date), nextSettings.monthStartDay) === priorMonth).reduce((sum, expense) => sum + expense.amount, 0)
     setPreviousSpent(earlierTracked + (allPlans.find((item) => item.id === priorMonth)?.startingSpent ?? 0))
     setPlan(monthPlan)
-    const savedReflection = await db.reflections.get(month)
+    const savedReflection = await db.reflections.get(viewMonth)
     setReflection(savedReflection ? { chips: savedReflection.chips, note: savedReflection.note } : undefined)
     setAudit(logs)
     applyTheme(nextSettings.theme)
@@ -906,7 +913,7 @@ function RestoreBackupDialog({ onClose, onImport }: {
       <button className="icon-button preview-close" type="button" onClick={onClose} disabled={restoring} aria-label="Close"><X size={18} /></button>
       <span className="overline">YOUR DATA</span>
       <h2 id="restore-backup-title">Restore backup</h2>
-      <p className="restore-backup-lead">Replace everything on this device with a Kakeibo backup file. Export your current data first if you may want it later.</p>
+      <p className="restore-backup-lead">Replace everything on this device with a Kakeibo backup, or paste an expenses / salary-cycle JSON file. Export your current data first if you may want it later.</p>
       <div className="backup-paste">
         <label htmlFor="restore-backup-file">Backup file</label>
         <div className="restore-backup-file">
@@ -921,8 +928,8 @@ function RestoreBackupDialog({ onClose, onImport }: {
           }} />
         </div>
         <label htmlFor="restore-backup-json">Or paste JSON</label>
-        <textarea id="restore-backup-json" rows={8} value={backupText} disabled={Boolean(selectedFile) || restoring} onChange={(event) => { setBackupText(event.target.value); setError('') }} placeholder='{"version": 1, "tables": { … }}' spellCheck={false} aria-describedby="restore-backup-help" />
-        <p className="backup-paste-help" id="restore-backup-help">Use a file or pasted text — not both. You will confirm before anything is replaced.</p>
+        <textarea id="restore-backup-json" rows={8} value={backupText} disabled={Boolean(selectedFile) || restoring} onChange={(event) => { setBackupText(event.target.value); setError('') }} placeholder='{"version": 1, "tables": { … }} or {"expenses": [ … ]}' spellCheck={false} aria-describedby="restore-backup-help" />
+        <p className="backup-paste-help" id="restore-backup-help">Use a file or pasted text — not both. Expense JSON is converted automatically; optional &quot;plan&quot; and &quot;income&quot; fields set your monthly numbers. You will confirm before anything is replaced.</p>
         {error && <p className="import-error" role="alert">{error}</p>}
         <div className="backup-paste-actions">
           <button className="button-primary" type="button" disabled={restoring || (!selectedFile && !backupText.trim())} onClick={() => void restore()}>{restoring ? 'Restoring…' : 'Restore backup'}</button>
@@ -1298,29 +1305,51 @@ async function exportBackup(notify: (text: string) => void) {
   } catch (error) { notify(error instanceof Error ? error.message : 'Could not create backup') }
 }
 
-async function importBackup(source: File | string, refresh: () => Promise<void>, notify: (text: string) => void): Promise<boolean> {
+async function importBackup(source: File | string, refresh: (options?: { realignMonth?: boolean }) => Promise<void>, notify: (text: string) => void): Promise<boolean> {
   try {
     const text = typeof source === 'string' ? source : await source.text()
-    let payload: { version?: number; tables?: Record<string, unknown[]> }
-    try { payload = JSON.parse(text) as { version?: number; tables?: Record<string, unknown[]> } } catch { throw new Error('That is not valid JSON. Paste the whole contents of a Kakeibo backup.') }
-    if (payload.version !== 1 || !payload.tables || !Array.isArray(payload.tables.expenses)) throw new Error('This is not a Kakeibo backup.')
+    const { source: restoreSource, payload } = parseBackupText(text)
+    const expenseCount = payload.tables.expenses.length
+    const plans = payload.tables.plans ?? []
+    const settingsRows = payload.tables.settings ?? []
+
     const confirmed = await confirmDialog({
-      title: 'Restore this backup?',
-      message: 'Current data on this device will be replaced by the backup.',
-      detail: 'Export your current data first if you may want it later.',
+      title: restoreSource === 'expense-json' ? 'Restore from expense data?' : 'Restore this backup?',
+      message: restoreSource === 'expense-json'
+        ? `This device will be set up with ${expenseCount} expense${expenseCount === 1 ? '' : 's'} from your file.`
+        : 'Current data on this device will be replaced by the backup.',
+      detail: restoreSource === 'expense-json'
+        ? 'Get started steps will be skipped. Add income in Settings if your file did not include it.'
+        : 'Export your current data first if you may want it later.',
       confirmLabel: 'Restore backup',
       tone: 'danger',
     })
     if (!confirmed) return false
     await db.transaction('rw', [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit], async () => {
       for (const table of [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit]) await table.clear()
-      for (const name of ['expenses', 'plans', 'reflections', 'journals', 'settings', 'audit']) {
-        const rows = payload.tables?.[name]
+      const tableNames = ['expenses', 'plans', 'reflections', 'journals', 'settings', 'audit'] as const
+      for (const name of tableNames) {
+        const rows = payload.tables[name] as unknown[] | undefined
+        if (name === 'settings') {
+          if (restoreSource === 'expense-json' && settingsRows[0]) {
+            await db.settings.put(settingsRows[0])
+          } else if (rows?.length) {
+            const restored = rows.map((row: unknown, index: number) =>
+              index === 0
+                ? normalizeRestoredSettings({ ...defaultSettings(), ...(row as AppSettings) }, plans, expenseCount)
+                : (row as AppSettings),
+            )
+            await db.settings.bulkPut(restored)
+          } else {
+            await db.settings.put(normalizeRestoredSettings(defaultSettings(), plans, expenseCount))
+          }
+          continue
+        }
         if (rows?.length) await db.table(name).bulkPut(rows as never[])
       }
     })
-    await refresh()
-    notify('Backup restored')
+    await refresh({ realignMonth: true })
+    notify(restoreSource === 'expense-json' ? 'Expenses restored' : 'Backup restored')
     return true
   } catch (error) { notify(error instanceof Error ? error.message : 'Could not restore backup'); return false }
 }

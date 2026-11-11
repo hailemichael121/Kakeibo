@@ -297,6 +297,11 @@ export function parseExpenseJson(text: string, options: ExpenseImportOptions = {
       issues.push({ row, severity: 'warning', message: 'Deleted record skipped.' })
       continue
     }
+    if (item.includeInTotals === false) {
+      skipped += 1
+      issues.push({ row, severity: 'warning', message: 'Excluded from totals and skipped.' })
+      continue
+    }
 
     const amount = parseAmount(item.amount)
     if (amount === null || amount <= 0) {

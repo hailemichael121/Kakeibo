@@ -15,7 +15,7 @@ const config: CapacitorConfig = {
       launchShowDuration: 1100,
       launchFadeOutDuration: 180,
       backgroundColor: '#F3F1EB',
-      androidScaleType: 'CENTER_CROP',
+      androidScaleType: 'CENTER_INSIDE',
       showSpinner: false,
     },
     StatusBar: {

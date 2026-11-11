@@ -46,7 +46,7 @@ for (const name of ['assets', 'kakeibo-guide']) {
   await cp(path.join(dist, name), path.join(web, name), { recursive: true });
 }
 
-for (const name of ['index.html', 'kakeibo.png', 'kakeibo.svg']) {
+for (const name of ['index.html', 'kakeibo.png', 'kakeibo.svg', 'kakeibo-app-icon.png']) {
   await cp(path.join(dist, name), path.join(web, name));
 }
 
