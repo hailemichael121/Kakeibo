@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Bot, BookOpen, CalendarDays, FileText, Highlighter, Plus, RotateCcw, Save, Search, Trash2, Pencil } from 'lucide-react'
 import { db, type JournalEntry, type JournalHighlight } from '@/db/db'
 import { deleteJournalEntry, restoreJournalEntry, saveJournalEntry } from '@/db/repo'
+import { confirmDialog } from './Dialog'
+import { DatePicker } from './DatePicker'
+import { Select } from './Select'
 
 const PROMPTS = [
   'What is on my mind about money?',
@@ -105,8 +108,14 @@ export function JournalScreen({ onChanged, notify }: { onChanged: () => Promise<
   const selected = entries.find((entry) => entry.id === selectedId)
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0
 
-  function confirmDiscard(): boolean {
-    return !isDirty || window.confirm('Discard your unsaved changes?')
+  async function confirmDiscard(): Promise<boolean> {
+    if (!isDirty) return true
+    return confirmDialog({
+      title: 'Discard unsaved changes?',
+      message: 'Your draft will be lost.',
+      confirmLabel: 'Discard changes',
+      tone: 'danger',
+    })
   }
 
   function clearDraft() {
@@ -121,14 +130,14 @@ export function JournalScreen({ onChanged, notify }: { onChanged: () => Promise<
     setError('')
   }
 
-  function startNew() {
-    if (!confirmDiscard()) return
+  async function startNew() {
+    if (!(await confirmDiscard())) return
     clearDraft()
     setView('edit')
   }
 
-  function openEntry(entry: JournalEntry) {
-    if (!confirmDiscard()) return
+  async function openEntry(entry: JournalEntry) {
+    if (!(await confirmDiscard())) return
     setSelectedId(entry.id)
     setView('read')
     setTitle(entry.title)
@@ -211,7 +220,14 @@ export function JournalScreen({ onChanged, notify }: { onChanged: () => Promise<
   }
 
   async function moveToRecentlyDeleted() {
-    if (!selectedId || !confirmDiscard() || !window.confirm('Move this note to recently deleted? You can restore it later.')) return
+    if (!selectedId || !(await confirmDiscard())) return
+    const confirmed = await confirmDialog({
+      title: 'Move this note to recently deleted?',
+      message: 'You can restore it later from the Recently deleted tab.',
+      confirmLabel: 'Move to deleted',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     try {
       await deleteJournalEntry(selectedId)
       clearDraft()
@@ -235,8 +251,8 @@ export function JournalScreen({ onChanged, notify }: { onChanged: () => Promise<
     }
   }
 
-  function backToList() {
-    if (!confirmDiscard()) return
+  async function backToList() {
+    if (!(await confirmDiscard())) return
     setView('list')
     setIsDirty(false)
     setError('')
@@ -251,7 +267,7 @@ export function JournalScreen({ onChanged, notify }: { onChanged: () => Promise<
     <aside className="journal-list panel">
       <div className="journal-list-head">
         <div><span className="overline">A QUIET PLACE TO WRITE</span><h2>Your journal</h2></div>
-        <button className="button-primary journal-new" onClick={startNew}><Plus size={16} /> New note</button>
+        <button className="button-primary journal-new" onClick={() => void startNew()}><Plus size={16} /> New note</button>
       </div>
       <p className="journal-local-note">A private space for money thoughts, plans, or anything on your mind.</p>
       <label className="journal-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your notes" aria-label="Search journal" /></label>
@@ -261,7 +277,7 @@ export function JournalScreen({ onChanged, notify }: { onChanged: () => Promise<
       </div>
       <div className="journal-entries">
         {visibleEntries.map((entry) => <div key={entry.id} className="journal-entry-card">
-          <button className={`journal-entry ${selectedId === entry.id ? 'selected' : ''}`} onClick={() => showDeleted ? undefined : openEntry(entry)}>
+          <button className={`journal-entry ${selectedId === entry.id ? 'selected' : ''}`} onClick={() => showDeleted ? undefined : void openEntry(entry)}>
             <span className="journal-entry-top"><b>{noteTitle(entry)}</b><time>{formatDate(entry.date)}</time></span>
             <span className="journal-entry-excerpt">{noteExcerpt(entry.body)}</span>
             {entry.mood && <span className="journal-mood">{entry.mood}</span>}
@@ -276,7 +292,7 @@ export function JournalScreen({ onChanged, notify }: { onChanged: () => Promise<
 
     {showNote && selected && <article className="journal-reader panel">
       <div className="journal-reader-toolbar">
-        <button className="journal-back icon-button" aria-label="Back to notes" title="Back to notes" onClick={backToList}><ArrowLeft size={17} /></button>
+        <button className="journal-back icon-button" aria-label="Back to notes" title="Back to notes" onClick={() => void backToList()}><ArrowLeft size={17} /></button>
         <div className="journal-reader-actions">
           <button className="icon-button" aria-label="Edit note" title="Edit note" onClick={editEntry}><Pencil size={16} /></button>
           <button className="icon-button" aria-label="Delete note" title="Move to recently deleted" onClick={() => void moveToRecentlyDeleted()}><Trash2 size={16} /></button>
@@ -291,7 +307,7 @@ export function JournalScreen({ onChanged, notify }: { onChanged: () => Promise<
 
     {showEditor && <div className="journal-editor panel">
       <div className="journal-editor-head">
-        <button className="journal-back icon-button" aria-label="Back to notes" title="Back to notes" onClick={backToList}><ArrowLeft size={17} /></button>
+        <button className="journal-back icon-button" aria-label="Back to notes" title="Back to notes" onClick={() => void backToList()}><ArrowLeft size={17} /></button>
         <div><span className="overline">{selected ? 'EDIT NOTE' : 'A NEW PAGE'}</span><div className={`journal-save-status ${isDirty ? 'unsaved' : ''}`}>{isDirty ? 'Unsaved changes' : selected ? 'Saved on this device' : 'Only saved on this device'}</div></div>
         <button className="button-primary" onClick={() => void save()} disabled={isSaving || !body.trim()}><Save size={15} /> {isSaving ? 'Saving…' : 'Save note'}</button>
       </div>
@@ -303,8 +319,8 @@ export function JournalScreen({ onChanged, notify }: { onChanged: () => Promise<
       </div>
       <textarea ref={bodyRef} id="journal-body" className="journal-body" value={body} onChange={(event) => updateBody(event.target.value)} placeholder="What would you like to put into words today?" />
       <div className="journal-editor-meta">
-        <label><CalendarDays size={15} /><span className="sr-only">Note date</span><input type="date" value={date} onChange={(event) => { setDate(event.target.value); setIsDirty(true) }} /></label>
-        <label><FileText size={15} /><span className="sr-only">Mood</span><select value={mood} onChange={(event) => { setMood(event.target.value); setIsDirty(true) }}><option value="">How are you feeling? (optional)</option>{MOODS.map((value) => <option key={value}>{value}</option>)}</select></label>
+        <div className="journal-date"><CalendarDays size={15} /><DatePicker value={date} onChange={(next) => { setDate(next); setIsDirty(true) }} label="Note date" /></div>
+        <div className="journal-mood-field"><FileText size={15} /><Select ariaLabel="Mood" value={mood} onChange={(next) => { setMood(next); setIsDirty(true) }} options={[{ value: '', label: 'How are you feeling? (optional)' }, ...MOODS.map((value) => ({ value, label: value }))]} /></div>
         <span>{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
       </div>
       <label className="journal-tags"><span>Tags <small>Optional · separate with commas</small></span><input value={tagsText} onChange={(event) => { setTagsText(event.target.value); setIsDirty(true) }} placeholder="e.g. goals, family, work" /></label>

@@ -8,7 +8,7 @@ import {
    Home, BookOpen as BookOpenIcon, BarChart3 as BarChartIcon, Clock3 as ClockIcon, Heart as HeartIcon
 } from 'lucide-react'
 import { db, amountText, defaultSettings, monthKey, uid, type AppSettings, type AuditEntry, type Category, type Expense, type MonthPlan } from '@/db/db'
-import { ensureSettings, deleteExpense, recordAudit, restoreExpense, saveExpense, savePlan, saveReflection, saveSettings } from '@/db/repo'
+import { ensureSettings, deleteExpense, recordAudit, resetAllData, restoreExpense, saveExpense, savePlan, saveReflection, saveSettings } from '@/db/repo'
 import { calculateBudget, categoryPercent } from '@/domain/budget'
 import { getBudgetCalendarDates, localDateKey, summarizeExpensesByLocalDay } from '@/domain/calendar'
 import { parseAmount } from '@/domain/amount'
@@ -19,12 +19,18 @@ import { JournalScreen } from './JournalScreen'
 import { applyTheme } from '@/theme'
 import { addHomeWidget, canAddHomeWidget, closeWidgetQuickAdd, updateHomeWidget } from '@/lib/widget'
 import { WidgetQuickAdd } from './WidgetQuickAdd'
-import { scheduleKakeiboReminders } from '@/lib/reminders'
+import { cancelKakeiboReminders, onReminderTap, scheduleKakeiboReminders } from '@/lib/reminders'
 import { TimePicker } from './TimePicker'
 import { Toggle } from './Toggle'
 import { Select } from './Select'
+import { DatePicker } from './DatePicker'
+import { setCalendarPreference, useCalendarPreference } from '@/lib/calendarPreference'
+import type { CalendarLanguage, CalendarSystem } from '@/lib/ethiopianCalendar'
+import { confirmDialog, DialogHost, noticeDialog, promptDialog } from './Dialog'
 
 type Screen = 'Home' | 'Insights' | 'History' | 'Journal' | 'Settings' | 'Ritual' | 'Audit' | 'Sync' | 'About'
+const SCREEN_NAMES: Screen[] = ['Home', 'Insights', 'History', 'Journal', 'Settings', 'Ritual', 'Audit', 'Sync', 'About']
+const isScreen = (value: string | null): value is Screen => Boolean(value && SCREEN_NAMES.includes(value as Screen))
 const NAV: { name: Exclude<Screen, 'Sync' | 'About'>; icon: typeof Home }[] = [
   { name: 'Home', icon: Home },
   { name: 'Insights', icon: BarChartIcon },
@@ -54,7 +60,9 @@ function getMonthTitle(value: string): string {
 }
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>('Home')
+  const launchParams = useMemo(() => new URLSearchParams(window.location.search), [])
+  const launchScreen = launchParams.get('screen') ?? (launchParams.get('route') === 'report' ? 'Insights' : null)
+  const [screen, setScreen] = useState<Screen>(isScreen(launchScreen) ? launchScreen : 'Home')
   const [settings, setSettings] = useState<AppSettings>(defaultSettings())
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [audit, setAudit] = useState<AuditEntry[]>([])
@@ -63,7 +71,7 @@ export function App() {
   const [previousSpent, setPreviousSpent] = useState(0)
   const [month, setMonth] = useState(localMonth())
   const initializedMonth = useRef(false)
-  const [expenseOpen, setExpenseOpen] = useState(false)
+  const [expenseOpen, setExpenseOpen] = useState(() => launchParams.get('route') === 'add')
   const [editing, setEditing] = useState<Expense>()
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('All')
@@ -73,7 +81,7 @@ export function App() {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [calendarDay, setCalendarDay] = useState('')
   const calendarRef = useRef<HTMLDivElement>(null)
-  const widgetQuickAdd = useMemo(() => new URLSearchParams(window.location.search).has('widgetQuickAdd'), [])
+  const widgetQuickAdd = useMemo(() => launchParams.has('widgetQuickAdd'), [launchParams])
   const [widgetNudgeVisible, setWidgetNudgeVisible] = useState(() => canAddHomeWidget() && window.localStorage.getItem('kakeibo.widgetNudgeSeen') !== '1')
 
   const refresh = useCallback(async () => {
@@ -108,6 +116,14 @@ export function App() {
     window.addEventListener('focus', listener)
     return () => window.removeEventListener('focus', listener)
   }, [refresh])
+  useEffect(() => onReminderTap((route) => {
+    if (route === 'add') {
+      setEditing(undefined)
+      setExpenseOpen(true)
+      return
+    }
+    setScreen('Insights')
+  }), [])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === 'n' && !event.ctrlKey && !event.metaKey && !event.altKey && !isTypingTarget(event.target)) {
@@ -155,7 +171,15 @@ export function App() {
 
   async function handleDelete(id: string) {
     const item = await db.expenses.get(id)
-    if (!item || !window.confirm(`Delete ${currencyAmount(item.amount, settings.currency)} expense? You can undo this.`)) return
+    if (!item) return
+    const confirmed = await confirmDialog({
+      title: 'Delete this expense?',
+      message: `${currencyAmount(item.amount, settings.currency)} · ${item.category}`,
+      detail: 'You can undo this right after deleting.',
+      confirmLabel: 'Delete expense',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     await deleteExpense(id)
     await refresh()
     notify('Expense deleted', id)
@@ -179,6 +203,42 @@ export function App() {
       void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), next)
       void scheduleKakeiboReminders(next)
     } catch (error) { notify(error instanceof Error ? error.message : 'Could not save settings') }
+  }
+
+  async function handleFactoryReset() {
+    const confirmed = await confirmDialog({
+      title: 'Factory reset Kakeibo?',
+      message: 'Every expense, monthly plan, reflection, journal note, audit entry, and setting on this device will be permanently deleted.',
+      detail: 'This cannot be undone. Export a backup first if you may want this data later.',
+      confirmLabel: 'Reset everything',
+      cancelLabel: 'Keep my data',
+      tone: 'danger',
+    })
+    if (!confirmed) return
+    try {
+      await cancelKakeiboReminders()
+      const fresh = await resetAllData()
+      window.localStorage.removeItem('kakeibo.widgetNudgeSeen')
+      setCalendarPreference({ system: 'gregorian', language: 'en' })
+      setWidgetNudgeVisible(false)
+      setSettings(fresh)
+      setExpenses([])
+      setPlan(undefined)
+      setReflection(undefined)
+      setAudit([])
+      setPreviousSpent(0)
+      setMonth(monthKey(new Date(), fresh.monthStartDay))
+      setCalendarDay('')
+      setSearch('')
+      setFilterCategory('All')
+      setEditing(undefined)
+      setExpenseOpen(false)
+      setScreen('Home')
+      await refresh()
+      notify('Kakeibo has been reset')
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not reset Kakeibo')
+    }
   }
 
   async function handleAddWidget() {
@@ -267,7 +327,7 @@ export function App() {
         {screen === 'Insights' && <InsightsScreen expenses={expenses} budget={budget} categories={activeCategories} currency={settings.currency} previousSpent={previousSpent} />}
         {screen === 'History' && <HistoryScreen expenses={expenses} categories={activeCategories} currency={settings.currency} search={search} onSearch={setSearch} filter={filterCategory} onFilter={setFilterCategory} onEdit={(e) => { setEditing(e); setExpenseOpen(true) }} onDelete={handleDelete} onExport={() => void exportExcel(expenses, settings.currency, month, notify)} onPdf={() => void exportPdf(expenses, settings.currency, month, notify)} onImport={(rows) => void importExpenses(rows, settings, refresh, notify)} />}
         {screen === 'Journal' && <JournalScreen onChanged={refresh} notify={notify} />}
-        {screen === 'Settings' && <SettingsScreen settings={settings} plan={plan} onSave={handleSaveSettings} onPlanSave={async (values) => { await savePlan({ ...values, id: month }); await refresh(); notify('Monthly plan saved'); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onDemoChange={async (enabled) => { await toggleDemo(enabled, settings, handleSaveSettings, month); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onExport={() => void exportBackup(notify)} onImport={(file) => void importBackup(file, refresh, notify)} onAudit={() => setScreen('Audit')} onSync={() => setScreen('Sync')} onAbout={() => setScreen('About')} onAddWidget={canAddHomeWidget() ? () => void handleAddWidget() : undefined} />}
+        {screen === 'Settings' && <SettingsScreen settings={settings} plan={plan} onSave={handleSaveSettings} onPlanSave={async (values) => { await savePlan({ ...values, id: month }); await refresh(); notify('Monthly plan saved'); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onDemoChange={async (enabled) => { await toggleDemo(enabled, settings, handleSaveSettings, month); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onExport={() => void exportBackup(notify)} onImport={(file) => void importBackup(file, refresh, notify)} onAudit={() => setScreen('Audit')} onSync={() => setScreen('Sync')} onAbout={() => setScreen('About')} onFactoryReset={handleFactoryReset} onAddWidget={canAddHomeWidget() ? () => void handleAddWidget() : undefined} />}
         {screen === 'Ritual' && <RitualScreen step={ritualStep} onStep={setRitualStep} month={month} plan={plan} reflection={reflection} budget={budget} expenses={expenses} settings={settings} onPlanSaved={async (values) => { await savePlan({ ...values, id: month }); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onReflected={async (chips, note) => { await saveReflection({ id: month, chips, note }); await refresh(); notify('Reflection saved') }} />}
         {screen === 'Audit' && <AuditScreen logs={audit} search={search} onSearch={setSearch} />}
         {screen === 'Sync' && <SyncScreen onBack={() => setScreen('Settings')} onMerged={refresh} notify={notify} />}
@@ -280,6 +340,7 @@ export function App() {
       <button className="mobile-floating-add" aria-label="New expense" title="New expense" onClick={openNewExpense}><Plus size={25} /></button>
       {expenseOpen && <ExpenseSheet expense={editing} categories={activeCategories} currency={settings.currency} onClose={closeExpense} onSave={handleSaveExpense} />}
       {toast && <div className="toast" role="status">{toast.text}{toast.id && <button onClick={() => void undoDelete(toast.id!)}>Undo</button>}<button className="toast-close" aria-label="Dismiss" onClick={() => setToast(undefined)}><X size={15} /></button></div>}
+      <DialogHost />
     </div>
   )
 }
@@ -588,6 +649,11 @@ function ExpenseSheet({ expense, categories, currency, onClose, onSave }: {
   const [date, setDate] = useState(expense?.date.slice(0, 10) ?? localDay())
   const value = Number(digits)
   const keypad = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫']
+  const key = useCallback((value: string) => {
+    if (value === '⌫') setDigits((current) => current.slice(0, -1))
+    else if (value === '.' && digits.includes('.')) return
+    else if (digits.length < 12) setDigits((current) => current + value)
+  }, [digits])
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Backspace') { e.preventDefault(); key('⌫') }
@@ -596,17 +662,12 @@ function ExpenseSheet({ expense, categories, currency, onClose, onSave }: {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [digits])
-  function key(value: string) {
-    if (value === '⌫') setDigits((current) => current.slice(0, -1))
-    else if (value === '.' && digits.includes('.')) return
-    else if (digits.length < 12) setDigits((current) => current + value)
-  }
+  }, [key])
   return <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}><section className="expense-sheet" role="dialog" aria-modal="true" aria-label="Add expense"><div className="sheet-handle" /><header className="sheet-head"><div><span className="overline">A MOMENT BEFORE YOU SPEND</span><h2>{expense ? 'Edit this choice' : 'What did you spend?'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={19} /></button></header><div className="amount-display"><span>{currency}</span><strong>{digits ? Number(digits).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0'}</strong></div>
     <div className="keypad">{keypad.map((number) => <button key={number} className={number === '⌫' ? 'delete-key' : ''} onClick={() => key(number)} aria-label={number === '⌫' ? 'Delete digit' : number}>{number === '⌫' ? <ArrowLeft size={18} /> : number}</button>)}</div>
     <div className="sheet-group"><div className="sheet-label">CATEGORY</div><div className="category-chips">{categories.map((item) => <button key={item.id} className={category === item.name ? 'selected' : ''} onClick={() => setCategory(item.name)}><CategoryIcon category={item} size={15} />{item.name}</button>)}</div></div>
     <div className="sheet-group pause-group"><div className="sheet-label">PAUSE · WHAT FEELS TRUE?</div><div className="pause-chips">{PAUSE_TAGS.map((tag) => <button key={tag} className={pause === tag ? 'selected' : ''} onClick={() => setPause(tag)}>{tag === 'Needed it' ? 'Needed it' : tag === 'Wanted it' ? 'Wanted it' : 'Regret'}</button>)}</div></div>
-    <label className="date-line"><span>{new Date(date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span><input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Expense date" /></label>
+    <div className="date-line"><DatePicker value={date} onChange={setDate} label="Expense date" /></div>
     <button className="button-primary save-expense" disabled={!Number.isFinite(value) || value <= 0 || !category} onClick={() => onSave({ amount: value, category, pause, date: new Date(`${date}T12:00:00`).toISOString() }, expense?.id)}>{expense ? 'Save changes' : 'Done'} <Check size={17} /></button>
     <p className="sheet-footnote">No judgement. Just noticing.</p>
   </section></div>
@@ -650,7 +711,7 @@ function HistoryScreen({ expenses, categories, currency, search, onSearch, filte
     const key = expense.date.slice(0, 10)
     byDay.set(key, [...(byDay.get(key) ?? []), expense])
   }
-  return <div className="panel history-panel"><div className="history-toolbar"><label className="search-field"><Search size={16} /><input placeholder="Search expenses" value={search} onChange={(e) => onSearch(e.target.value)} /></label><select value={filter} onChange={(e) => onFilter(e.target.value)}><option>All</option>{categories.map((c) => <option key={c.id}>{c.name}</option>)}</select><div className="history-actions"><button className="button-quiet" onClick={onExport}><FileSpreadsheet size={15} /> Excel</button><button className="button-quiet" onClick={onPdf}><Download size={15} /> PDF</button><label className="button-quiet file-import"><ArrowUpFromLine size={15} /> Import<input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setReading(true); setImportError(''); void parseImportFile(file).then((result) => { if (!result.rows.length) throw new Error('No valid expenses found. Include Amount and Category columns.') ; setPreview({ fileName: file.name, ...result }) }).catch((error: unknown) => setImportError(error instanceof Error ? error.message : 'Could not read this spreadsheet.')).finally(() => setReading(false)) } e.currentTarget.value = '' }} /></label></div></div>
+  return <div className="panel history-panel"><div className="history-toolbar"><label className="search-field"><Search size={16} /><input placeholder="Search expenses" value={search} onChange={(e) => onSearch(e.target.value)} /></label><Select ariaLabel="Filter by category" value={filter} onChange={onFilter} options={[{ value: 'All', label: 'All categories' }, ...categories.map((c) => ({ value: c.name, label: c.name }))]} /><div className="history-actions"><button className="button-quiet" onClick={onExport}><FileSpreadsheet size={15} /> Excel</button><button className="button-quiet" onClick={onPdf}><Download size={15} /> PDF</button><label className="button-quiet file-import"><ArrowUpFromLine size={15} /> Import<input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setReading(true); setImportError(''); void parseImportFile(file).then((result) => { if (!result.rows.length) throw new Error('No valid expenses found. Include Amount and Category columns.') ; setPreview({ fileName: file.name, ...result }) }).catch((error: unknown) => setImportError(error instanceof Error ? error.message : 'Could not read this spreadsheet.')).finally(() => setReading(false)) } e.currentTarget.value = '' }} /></label></div></div>
     {byDay.size ? [...byDay.entries()].map(([day, items]) => <section className="history-day" key={day}><div className="day-head"><span>{new Date(day + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span><b>{currencyAmount(items.reduce((sum, e) => sum + e.amount, 0), currency)}</b></div>{items.map((e) => <ExpenseRow key={e.id} expense={e} category={categories.find((c) => c.name === e.category)} currency={currency} onEdit={onEdit} onDelete={onDelete} />)}</section>) : <EmptyState title={search ? 'Nothing found.' : 'No choices yet.'} detail={search ? 'Try another search.' : 'Add your first expense when you’re ready.'} />}
     {importError && <p className="import-error" role="alert">{importError}</p>}
     {reading && <div className="import-status">Reading your spreadsheet…</div>}
@@ -687,12 +748,14 @@ function RitualScreen({ step, onStep, month, plan, reflection, budget, expenses,
     </section></div>
 }
 
-function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onExport, onImport, onAudit, onSync, onAbout, onAddWidget }: {
+function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onExport, onImport, onAudit, onSync, onAbout, onFactoryReset, onAddWidget }: {
   settings: AppSettings; plan?: MonthPlan; onSave: (patch: Partial<AppSettings>) => Promise<void>; onPlanSave: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onDemoChange: (enabled: boolean) => void; onExport: () => void; onImport: (file: File) => void; onAudit: () => void; onSync: () => void
   onAbout: () => void
+  onFactoryReset: () => Promise<void>
   onAddWidget?: () => void
 }) {
   const [settingsOpen, setSettingsOpen] = useState<Record<string, boolean>>({ month: true, categories: false, feel: true, widget: true, reminders: false, data: false, about: false, demo: false })
+  const calendarPreference = useCalendarPreference()
   const toggle = (key: string) => setSettingsOpen((s) => ({ ...s, [key]: !s[key] }))
   const [categories, setCategories] = useState(settings.categories)
   const [editingId, setEditingId] = useState<string>()
@@ -711,7 +774,7 @@ function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onEx
   useEffect(() => { setRemindersEnabled(settings.remindersEnabled ?? true); setReminderMiddayTime(settings.reminderMiddayTime ?? '12:00'); setReminderNightTime(settings.reminderNightTime ?? '21:00'); setReminderWeeklyEnabled(settings.reminderWeeklyEnabled ?? true); setReminderWeeklyDay(String(settings.reminderWeeklyDay ?? 0)); }, [settings]);
   const saveCategoryList = async (next: Category[]) => {
     if (new Set(next.map((category) => category.name.trim().toLocaleLowerCase())).size !== next.length) {
-      window.alert('Each category needs a unique name.')
+      await noticeDialog({ title: 'Category names must be unique', message: 'Each category needs a unique name.', confirmLabel: 'Got it' })
       return
     }
     const renamed = categories.flatMap((previous) => {
@@ -729,6 +792,18 @@ function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onEx
     await onSave({ categories: next })
   }
   function beginEdit(category: Category) { setEditingId(category.id); setCategoryName(category.name) }
+  async function addCategory() {
+    const name = await promptDialog({
+      title: 'Name your new category',
+      label: 'Category name',
+      placeholder: 'e.g. Family',
+      required: true,
+      confirmLabel: 'Add category',
+      validate: (value) => categories.some((category) => category.name.toLocaleLowerCase() === value.toLocaleLowerCase()) ? 'That category name is already in use.' : undefined,
+    })
+    if (!name) return
+    await saveCategoryList([...categories, { id: uid(), name, icon: 'ShoppingBag', color: '#A8ACCB', archived: false }])
+  }
   return <div className="settings-stack">
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('month')}><span className="settings-icon"><Wallet size={18} /></span><div><h2>Your month</h2><small>Budget basics and timing</small></div><ChevronRight size={18} className={`chev ${settingsOpen.month ? 'open' : ''}`} /></header>
       {settingsOpen.month && <><div className="settings-row"><span>Monthly income</span><input aria-label="Monthly income" className="settings-number" type="number" min="0" value={income} onChange={(event) => setIncome(event.target.value)} placeholder="0" /></div>
@@ -739,11 +814,11 @@ function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onEx
       <div className="settings-row"><span>Month starts on</span><Select value={String(settings.monthStartDay)} onChange={(v) => void onSave({ monthStartDay: Number(v) })} options={[{ value: '1', label: '1st of the month' }, { value: '15', label: '15th of the month' }]} /></div>
       <button className="button-primary plan-save" onClick={() => void onPlanSave({ income: Number(income) || 0, fixed: Number(fixed) || 0, startingSpent: Number(startingSpent) || 0, savingsTarget: savingsEnabled ? Number(savings) || 0 : null })}>Save monthly plan</button></>}
     </section>
-    <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('categories')}><span className="settings-icon"><MoreHorizontal size={18} /></span><div><h2>Your categories</h2><small>Four gentle buckets. Make them yours.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.categories ? 'open' : ''}`} /></header>{settingsOpen.categories && <><div className="settings-categories">{categories.map((category) => <div className={`settings-category ${category.archived ? 'archived' : ''}`} key={category.id}>{editingId === category.id ? <><input autoFocus value={categoryName} onChange={(e) => setCategoryName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, name: categoryName.trim() || c.name } : c)); setEditingId(undefined) } }} /><button onClick={() => { void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, name: categoryName.trim() || c.name } : c)); setEditingId(undefined) }}><Check size={15} /></button></> : <><CategoryIcon category={category} /><b>{category.name}</b><select aria-label={`Icon for ${category.name}`} value={category.icon} onChange={(e) => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, icon: e.target.value } : c))}>{Object.keys(CATEGORY_ICONS).map((icon) => <option key={icon}>{icon}</option>)}</select><input aria-label={`${category.name} color`} type="color" value={category.color} onChange={(e) => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, color: e.target.value } : c))} /><button title="Rename" onClick={() => beginEdit(category)}><Pencil size={14} /></button><button title={category.archived ? 'Unarchive' : 'Archive'} onClick={() => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, archived: !c.archived } : c))}>{category.archived ? <ArrowUpFromLine size={15} /> : <Trash2 size={14} />}</button></>}</div>)}</div><button className="text-button add-category" onClick={() => { const name = window.prompt('Name your new category'); if (!name?.trim()) return; void saveCategoryList([...categories, { id: uid(), name: name.trim(), icon: 'ShoppingBag', color: '#A8ACCB', archived: false }]) }}><Plus size={16} /> Add category</button></>}</section>
-    <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('feel')}><span className="settings-icon"><Sun size={18} /></span><div><h2>Appearance</h2><small>Quiet, comfortable, and yours.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.feel ? 'open' : ''}`} /></header>{settingsOpen.feel && <><div className="settings-row"><span>Theme</span><Select value={settings.theme} onChange={(v) => void onSave({ theme: v as AppSettings['theme'] })} options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'auto', label: 'Match device' }]} /></div></>}</section>
+    <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('categories')}><span className="settings-icon"><MoreHorizontal size={18} /></span><div><h2>Your categories</h2><small>Four gentle buckets. Make them yours.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.categories ? 'open' : ''}`} /></header>{settingsOpen.categories && <><div className="settings-categories">{categories.map((category) => <div className={`settings-category ${category.archived ? 'archived' : ''}`} key={category.id}>{editingId === category.id ? <><input autoFocus value={categoryName} onChange={(e) => setCategoryName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, name: categoryName.trim() || c.name } : c)); setEditingId(undefined) } }} /><button onClick={() => { void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, name: categoryName.trim() || c.name } : c)); setEditingId(undefined) }}><Check size={15} /></button></> : <><CategoryIcon category={category} /><b>{category.name}</b><Select ariaLabel={`Icon for ${category.name}`} value={category.icon} onChange={(value) => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, icon: value } : c))} options={Object.keys(CATEGORY_ICONS).map((icon) => ({ value: icon, label: icon }))} /><input aria-label={`${category.name} color`} type="color" value={category.color} onChange={(e) => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, color: e.target.value } : c))} /><button title="Rename" onClick={() => beginEdit(category)}><Pencil size={14} /></button><button title={category.archived ? 'Unarchive' : 'Archive'} onClick={() => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, archived: !c.archived } : c))}>{category.archived ? <ArrowUpFromLine size={15} /> : <Trash2 size={14} />}</button></>}</div>)}</div><button className="text-button add-category" onClick={() => void addCategory()}><Plus size={16} /> Add category</button></>}</section>
+    <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('feel')}><span className="settings-icon"><Sun size={18} /></span><div><h2>Appearance</h2><small>Quiet, comfortable, and yours.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.feel ? 'open' : ''}`} /></header>{settingsOpen.feel && <><div className="settings-row"><span>Theme</span><Select value={settings.theme} onChange={(v) => void onSave({ theme: v as AppSettings['theme'] })} options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'auto', label: 'Match device' }]} /></div><div className="settings-row"><span>Calendar</span><Select ariaLabel="Calendar system" value={calendarPreference.system} onChange={(v) => setCalendarPreference({ system: v as CalendarSystem })} options={[{ value: 'gregorian', label: 'Gregorian' }, { value: 'ethiopian', label: 'Ethiopian' }]} /></div>{calendarPreference.system === 'ethiopian' && <div className="settings-row"><span>Ethiopian day names</span><Select ariaLabel="Ethiopian day names" value={calendarPreference.language} onChange={(v) => setCalendarPreference({ language: v as CalendarLanguage })} options={[{ value: 'en', label: 'English' }, { value: 'am', label: 'አማርኛ' }]} /></div>}</>}</section>
     {onAddWidget && <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('widget')}><span className="settings-icon"><Plus size={18} /></span><div><h2>Home screen widget</h2><small>See what is left without opening Kakeibo.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.widget ? 'open' : ''}`} /></header>{settingsOpen.widget && <div className="settings-row"><span>Add the spendable-left widget to your home screen</span><button className="button-quiet" onClick={onAddWidget}><Plus size={16} /> Add widget</button></div>}</section>}
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('reminders')}><span className="settings-icon"><Clock3 size={18} /></span><div><h2>Reminders</h2><small>Gentle nudges to register your spending.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.reminders ? 'open' : ''}`} /></header>{settingsOpen.reminders && <><div className="settings-row"><span>Enable reminders</span><Toggle checked={remindersEnabled} onChange={(v) => { setRemindersEnabled(v); void onSave({ remindersEnabled: v }) }} /></div><div className="settings-row"><span>Midday reminder</span><TimePicker value={reminderMiddayTime} onChange={(v) => { setReminderMiddayTime(v); void onSave({ reminderMiddayTime: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Night reminder</span><TimePicker value={reminderNightTime} onChange={(v) => { setReminderNightTime(v); void onSave({ reminderNightTime: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Weekly report</span><Toggle checked={reminderWeeklyEnabled} onChange={(v) => { setReminderWeeklyEnabled(v); void onSave({ reminderWeeklyEnabled: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Weekly report day</span><Select value={reminderWeeklyDay} onChange={(v) => { setReminderWeeklyDay(v); void onSave({ reminderWeeklyDay: Number(v) }) }} disabled={!remindersEnabled || !reminderWeeklyEnabled} options={[{ value: '0', label: 'Sunday' }, { value: '1', label: 'Monday' }, { value: '2', label: 'Tuesday' }, { value: '3', label: 'Wednesday' }, { value: '4', label: 'Thursday' }, { value: '5', label: 'Friday' }, { value: '6', label: 'Saturday' }]} /></div></>}</section>
-    <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('data')}><span className="settings-icon"><ArrowDownToLine size={18} /></span><div><h2>Your data</h2><small>Keep a copy or move it with you.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.data ? 'open' : ''}`} /></header>{settingsOpen.data && <div className="data-actions"><button className="button-quiet" onClick={onExport}><Download size={16} /> Backup data</button><label className="button-quiet file-import"><ArrowUpFromLine size={16} /> Restore backup<input type="file" accept=".json" onChange={(e) => { const file = e.target.files?.[0]; if (file) onImport(file); e.currentTarget.value = '' }} /></label><button className="button-quiet" onClick={onSync}><RefreshCw size={16} /> Sync devices</button><button className="button-quiet" onClick={onAudit}><Clock3 size={16} /> View audit log</button></div>}</section>
+    <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('data')}><span className="settings-icon"><ArrowDownToLine size={18} /></span><div><h2>Your data</h2><small>Keep a copy or move it with you.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.data ? 'open' : ''}`} /></header>      {settingsOpen.data && <><div className="data-actions"><button className="button-quiet" onClick={onExport}><Download size={16} /> Backup data</button><label className="button-quiet file-import"><ArrowUpFromLine size={16} /> Restore backup<input type="file" accept=".json" onChange={(e) => { const file = e.target.files?.[0]; if (file) onImport(file); e.currentTarget.value = '' }} /></label><button className="button-quiet" onClick={onSync}><RefreshCw size={16} /> Sync devices</button><button className="button-quiet" onClick={onAudit}><Clock3 size={16} /> View audit log</button></div><div className="factory-reset-row"><span><b>Factory reset</b><small>Erase everything on this device and start fresh.</small></span><button className="button-danger-quiet" onClick={() => void onFactoryReset()}><Trash2 size={15} /> Factory reset</button></div></>}</section>
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('about')}><span className="settings-icon"><Info size={18} /></span><div><h2>About Kakeibo</h2><small>Its roots, purpose, and categories</small></div><ChevronRight size={18} className={`chev ${settingsOpen.about ? 'open' : ''}`} /></header>{settingsOpen.about && <button className="settings-link" onClick={onAbout}><span><b>Explore Kakeibo</b><small>Open the illustrated guide and monthly practice.</small></span><ChevronRight size={18} /></button>}</section>
     <section className="panel settings-group demo-setting"><header className="settings-header-clickable" onClick={() => toggle('demo')}><span className="settings-icon"><CircleHelp size={18} /></span><div><h2>Trying things out?</h2><small>Demo data stays local and is easy to remove.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.demo ? 'open' : ''}`} /></header>{settingsOpen.demo && <div className="settings-row"><span>Seed sample expenses</span><Toggle checked={settings.demoEnabled} onChange={(v) => onDemoChange(v)} /></div>}</section>
     <p className="settings-note">No account. No cloud. Your financial life stays on this device.</p>
@@ -944,7 +1019,14 @@ async function importBackup(file: File, refresh: () => Promise<void>, notify: (t
   try {
     const payload = JSON.parse(await file.text()) as { version?: number; tables?: Record<string, unknown[]> }
     if (payload.version !== 1 || !payload.tables || !Array.isArray(payload.tables.expenses)) throw new Error('This is not a Kakeibo backup.')
-    if (!window.confirm('Restore this backup? Current data will be replaced.')) return
+    const confirmed = await confirmDialog({
+      title: 'Restore this backup?',
+      message: 'Current data on this device will be replaced by the backup.',
+      detail: 'Export your current data first if you may want it later.',
+      confirmLabel: 'Restore backup',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     await db.transaction('rw', [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit], async () => {
       for (const table of [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit]) await table.clear()
       for (const name of ['expenses', 'plans', 'reflections', 'journals', 'settings', 'audit']) {

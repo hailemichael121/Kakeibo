@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, shell } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 const { createLanServer } = require('./lan.cjs')
@@ -123,6 +123,92 @@ const lan = createLanServer({
   },
 })
 
+const reminderTimers = new Set()
+let reminderGeneration = 0
+
+function clearReminders() {
+  reminderGeneration += 1
+  for (const timer of reminderTimers) clearTimeout(timer)
+  reminderTimers.clear()
+}
+
+function parseReminderTime(value, fallbackHour = 12) {
+  const [hour, minute] = String(value || '').split(':').map((part) => Number.parseInt(part, 10))
+  return {
+    hour: Number.isFinite(hour) && hour >= 0 && hour <= 23 ? hour : fallbackHour,
+    minute: Number.isFinite(minute) && minute >= 0 && minute <= 59 ? minute : 0,
+  }
+}
+
+function nextDaily(now, value, fallbackHour) {
+  const { hour, minute } = parseReminderTime(value, fallbackHour)
+  const at = new Date(now)
+  at.setHours(hour, minute, 0, 0)
+  if (at <= now) at.setDate(at.getDate() + 1)
+  return at
+}
+
+function nextWeekly(now, day, hour, minute) {
+  const at = new Date(now)
+  at.setHours(hour, minute, 0, 0)
+  const target = ((Number(day) || 0) % 7 + 7) % 7
+  const diff = ((target - at.getDay()) % 7 + 7) % 7
+  at.setDate(at.getDate() + diff)
+  if (diff === 0 && at <= now) at.setDate(at.getDate() + 7)
+  return at
+}
+
+function showReminder(route, title, body) {
+  if (!Notification.isSupported()) return
+  const notification = new Notification({ title, body, silent: false })
+  notification.on('click', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+    mainWindow.webContents.send('kakeibo:reminderRoute', route)
+  })
+  notification.show()
+}
+
+function armReminder(generation, at, route, title, body, next) {
+  if (generation !== reminderGeneration) return
+  const delay = Math.max(1000, at.getTime() - Date.now())
+  const timer = setTimeout(() => {
+    reminderTimers.delete(timer)
+    if (generation !== reminderGeneration) return
+    showReminder(route, title, body)
+    next()
+  }, delay)
+  if (typeof timer.unref === 'function') timer.unref()
+  reminderTimers.add(timer)
+}
+
+function scheduleReminders(options = {}) {
+  clearReminders()
+  if (!options.enabled) return
+  const generation = reminderGeneration
+  const midday = String(options.middayTime || '12:00')
+  const night = String(options.nightTime || '21:00')
+  const nightParts = parseReminderTime(night, 21)
+
+  const armDaily = (time, fallbackHour, route, title, body) => {
+    const at = nextDaily(new Date(), time, fallbackHour)
+    armReminder(generation, at, route, title, body, () => armDaily(time, fallbackHour, route, title, body))
+  }
+
+  armDaily(midday, 12, 'add', 'Kakeibo · Midday pause', 'Take a moment to log any purchases so far today.')
+  armDaily(night, 21, 'add', 'Kakeibo · End-of-day check-in', 'Register today’s spending and reflect gently.')
+
+  if (options.weeklyEnabled) {
+    const armWeekly = () => {
+      const at = nextWeekly(new Date(), options.weeklyDay, nightParts.hour, nightParts.minute)
+      armReminder(generation, at, 'report', 'Kakeibo · Weekly report', 'Review your week’s spending and set intentions for next week.', armWeekly)
+    }
+    armWeekly()
+  }
+}
+
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
@@ -149,6 +235,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     lan.stop()
+    clearReminders()
   })
 
   app.on('window-all-closed', () => {
@@ -183,4 +270,12 @@ ipcMain.handle('kakeibo:lanStart', (_event, payload) => lan.start(payload))
 
 ipcMain.handle('kakeibo:lanStop', () => {
   lan.stop()
+})
+
+ipcMain.handle('kakeibo:remindersSchedule', (_event, options) => {
+  scheduleReminders(options)
+})
+
+ipcMain.handle('kakeibo:remindersCancel', () => {
+  clearReminders()
 })

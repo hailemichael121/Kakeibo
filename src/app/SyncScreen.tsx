@@ -6,6 +6,7 @@ import { parseLanLink } from '@/services/lanLink'
 import { shareBytes } from '@/services/share'
 import { applySync, buildSyncFile, MAX_SYNC_BYTES, parseSyncPayload, previewSync, readSyncData, undoSync, type SyncPackage, type SyncPreview } from '@/services/sync'
 import { QrScanner } from './QrScanner'
+import { confirmDialog } from './Dialog'
 
 type Direction = 'send' | 'receive'
 interface PendingSync {
@@ -175,7 +176,15 @@ export function SyncScreen({ onBack, onMerged, notify }: {
   }
 
   async function undoLastMerge() {
-    if (!lastSnapshot || !window.confirm(`Undo the merge from ${lastSnapshot.fileName}? This is only available if no data has changed since that merge.`)) return
+    if (!lastSnapshot) return
+    const confirmed = await confirmDialog({
+      title: 'Undo the last merge?',
+      message: `The merge from ${lastSnapshot.fileName} will be reversed.`,
+      detail: 'This is only available if no data has changed since that merge.',
+      confirmLabel: 'Undo merge',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     setBusy(true)
     try {
       const undone = await undoSync(lastSnapshot.id)

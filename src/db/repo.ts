@@ -142,3 +142,12 @@ export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSett
   await recordAudit({ entity: 'settings', entityId: 'app', action: 'updated', summary: 'Updated settings', data: JSON.stringify(patch) })
   return next
 }
+
+export async function resetAllData(): Promise<AppSettings> {
+  await db.transaction('rw', [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit, db.syncSnapshots], async () => {
+    for (const table of [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit, db.syncSnapshots]) await table.clear()
+  })
+  const settings = defaultSettings()
+  await db.settings.put(settings)
+  return settings
+}

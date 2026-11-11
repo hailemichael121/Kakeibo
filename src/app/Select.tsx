@@ -8,9 +8,10 @@ type SelectProps = {
   onChange: (value: string) => void
   options: Option[]
   disabled?: boolean
+  ariaLabel?: string
 }
 
-export function Select({ value, onChange, options, disabled }: SelectProps) {
+export function Select({ value, onChange, options, disabled, ariaLabel }: SelectProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const current = options.find((o) => o.value === value)
@@ -29,7 +30,7 @@ export function Select({ value, onChange, options, disabled }: SelectProps) {
 
   return (
     <div className="custom-select" ref={ref}>
-      <button className="custom-select-trigger" onClick={() => setOpen((v) => !v)} type="button">
+      <button className="custom-select-trigger" aria-label={ariaLabel} onClick={() => setOpen((v) => !v)} type="button">
         <span>{current?.label ?? value}</span>
         <ChevronDown size={16} />
       </button>

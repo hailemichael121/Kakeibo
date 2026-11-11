@@ -642,7 +642,7 @@ html[data-theme="dark"] .panel { border-color: rgba(255,255,255,.025); }
   .sheet-head h2 { font-size: 17px; }
   .amount-display { padding: 12px 0 9px; }
   .amount-display strong { font-size: 34px; }
-  .keypad { gap: 7px; padding: 10px 0; }
+  .keypad { gap: 7px; margin: 8px -22px 0; padding: 14px 16px 12px; border-radius: 28px 28px 16px 16px; background: linear-gradient(180deg, var(--surface), var(--base)); box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 -10px 30px rgba(31,38,32,.05); }
   .keypad button { min-height: 37px; }
   .sheet-group { margin: 6px 0 10px; }
   .category-chips, .pause-chips { gap: 6px; }
@@ -854,3 +854,69 @@ html.widget-quick-add #root { background: transparent !important; }
 .quickadd-save { width: 100%; margin-top: 16px; }
 .quickadd-loading { text-align: center; color: var(--muted); font-size: 14px; }
 @keyframes quickadd-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+/* Custom dialogs */
+.dialog-backdrop { position: fixed; z-index: 90; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(25,31,26,.42); backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px); animation: fade-in .16s ease-out; }
+.dialog-card { width: min(470px, 100%); max-height: min(90dvh, 720px); overflow: auto; padding: 20px; border-radius: 26px; border: 1px solid rgba(255,255,255,.68); box-shadow: 0 30px 90px rgba(22,29,23,.3); animation: sheet-in .2s ease-out; }
+.dialog-head { display: flex; align-items: flex-start; gap: 12px; }
+.dialog-icon { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 13px; color: var(--accent); background: var(--accent-soft); }
+.dialog-icon.danger { color: #9a4b43; background: rgba(166,95,87,.14); }
+.dialog-copy { flex: 1; min-width: 0; }
+.dialog-copy h2 { margin: 0; font-size: 18px; letter-spacing: -.035em; }
+.dialog-copy p { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.dialog-field { display: grid; gap: 7px; margin-top: 16px; }
+.dialog-field label { color: var(--muted); font-size: 11px; font-weight: 600; }
+.dialog-field input, .dialog-field textarea { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 11px; background: var(--base); color: var(--ink); font-size: 13px; resize: vertical; }
+.dialog-error { margin: 0; color: #9a4b43; font-size: 11px; }
+.dialog-detail { margin: 14px 0 0; padding: 10px 12px; border-radius: 11px; background: var(--base); color: var(--muted); font-size: 10px; line-height: 1.6; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.dialog-actions > button { min-height: 40px; }
+.button-danger { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 15px; border: 0; border-radius: 11px; background: #9a4b43; color: #fff; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(154,75,67,.22); }
+.button-danger:hover { background: #8a4039; }
+.button-danger-quiet { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 12px; border: 1px solid rgba(166,95,87,.3); border-radius: 11px; background: rgba(166,95,87,.07); color: #9a4b43; font-size: 11px; font-weight: 600; }
+.button-danger-quiet:hover { background: rgba(166,95,87,.13); }
+[data-theme='dark'] .button-danger-quiet { color: #e0a49d; border-color: rgba(224,164,157,.3); background: rgba(224,164,157,.08); }
+[data-theme='dark'] .dialog-icon.danger { color: #e0a49d; }
+[data-theme='dark'] .dialog-error { color: #e0a49d; }
+
+/* Factory reset */
+.factory-reset-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.factory-reset-row > span { display: grid; gap: 3px; min-width: 0; }
+.factory-reset-row b { color: var(--ink); font-size: 11px; }
+.factory-reset-row small { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.factory-reset-row > button { flex: none; }
+
+/* Custom date picker */
+.date-picker { position: relative; }
+.date-picker-trigger { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--muted); font-size: 11px; }
+.date-picker-trigger:hover { color: var(--ink); }
+.date-picker-trigger:disabled { opacity: .45; cursor: not-allowed; }
+.date-picker-popover { position: absolute; z-index: 70; top: calc(100% + 8px); right: 0; width: min(320px, calc(100vw - 28px)); padding: 13px; border: 1px solid rgba(255,255,255,.7); border-radius: 20px; box-shadow: 0 28px 60px rgba(31,38,32,.24); }
+[data-theme='dark'] .date-picker-popover { border-color: rgba(255,255,255,.2); }
+.date-picker-modes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.date-picker-segment { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--base); }
+.date-picker-segment button { min-height: 26px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 10px; font-weight: 600; }
+.date-picker-segment button:hover { color: var(--ink); }
+.date-picker-segment button[aria-pressed='true'] { background: var(--surface); color: var(--ink); box-shadow: 0 2px 8px rgba(31,38,32,.12); }
+.date-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.date-picker-head b { font-size: 12px; font-weight: 600; }
+.date-picker-weekdays, .date-picker-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.date-picker-weekdays span { padding: 3px 0; color: var(--muted); text-align: center; font-size: 9px; }
+.date-picker-weekdays.ethiopian span { font-size: 8.5px; letter-spacing: -.02em; }
+.date-picker-day { display: grid; place-items: center; min-height: 32px; padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--ink); font-size: 11px; }
+.date-picker-day:hover { background: var(--line); }
+.date-picker-day.today { box-shadow: inset 0 0 0 1px var(--accent); }
+.date-picker-day.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.date-picker-foot { display: flex; justify-content: flex-end; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.date-line { justify-content: flex-end; }
+.date-line .date-picker { margin-left: auto; }
+.date-line .date-picker-popover { top: auto; bottom: calc(100% + 8px); }
+
+/* Journal date and mood controls */
+.journal-date, .journal-mood-field { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.journal-date .date-picker-trigger, .journal-mood-field .custom-select-trigger { min-height: 30px; padding: 4px 8px; border-radius: 8px; background: var(--base); font-size: 10px; }
+@media (max-width: 760px) {
+  .factory-reset-row { align-items: flex-start; flex-direction: column; }
+  .factory-reset-row > button { width: 100%; }
+  .dialog-card { padding: 17px; border-radius: 22px; }
+}
