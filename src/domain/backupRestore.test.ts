@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { inferSalaryCycleDates, isExpenseImportPayload, materializeBackupFromExpenseJson, parseBackupText } from './backupRestore'
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 const USER_EXPENSES = {
   expenses: [
@@ -36,5 +41,14 @@ describe('backupRestore', () => {
   it('infers salary cycle dates for day-only seeds', () => {
     const dates = inferSalaryCycleDates({ startDay: 30, endDay: 2 }, new Date('2026-11-11T12:00:00'))
     expect(dates).toEqual({ start: '2026-10-30', end: '2026-11-02' })
+  })
+
+  it('materializes an expense-seed with day numbers and skips excluded rows', () => {
+    const text = readFileSync(path.join(repoRoot, 'sample-data/expense-seed.salary-cycle.json'), 'utf8')
+    const { source, payload } = parseBackupText(text)
+    expect(source).toBe('expense-json')
+    expect(payload.tables.expenses).toHaveLength(13)
+    expect(payload.tables.expenses.some((row) => row.id === 'seed-008')).toBe(false)
+    expect(payload.tables.settings[0]?.monthStartDay).toBe(30)
   })
 })

@@ -324,7 +324,7 @@ export function parseExpenseJson(text: string, options: ExpenseImportOptions = {
     const pauseResult = normalizeImportPause(item.pause)
     if (pauseResult.warning) issues.push({ row, severity: 'warning', field: 'pause', message: pauseResult.warning })
 
-    const note = normalizeImportText(item.note) ?? normalizeImportText(item.description)
+    const note = normalizeImportText(item.note) ?? normalizeImportText(item.description) ?? normalizeImportText(item.notes)
     const from = normalizeImportText(item.from)
     const to = normalizeImportText(item.to)
     const rawPeople = item.peopleCount ?? item.people_count ?? item.people

@@ -22,17 +22,22 @@ const run = (command, args, options = {}) => {
   }
 };
 
+const skipBuild = process.env.KAKEIBO_UPDATE_SKIP_BUILD === '1';
+
 if (process.platform === 'linux') {
   const debName = `kakeibo_${version}_amd64.deb`;
   let debPath = path.join(repoRoot, 'release', debName);
 
-  if (!(await exists(debPath))) {
-    console.log(`Missing ${path.relative(repoRoot, debPath)}; building Linux desktop package…`);
+  if (skipBuild) {
+    console.log('Skipping rebuild (KAKEIBO_UPDATE_SKIP_BUILD=1).');
+  } else {
+    console.log('Building the latest desktop app before install (set KAKEIBO_UPDATE_SKIP_BUILD=1 to reuse release/*.deb)…');
     run('npm', ['run', 'desktop:build:linux']);
-    if (!(await exists(debPath))) {
-      console.error(`Build finished but ${debName} was not found in release/.`);
-      process.exit(1);
-    }
+  }
+
+  if (!(await exists(debPath))) {
+    console.error(`${debName} was not found in release/. Run: npm run desktop:build:linux`);
+    process.exit(1);
   }
 
   const installPath = path.join('/tmp', debName);

@@ -1,0 +1,129 @@
+{
+  "schemaVersion": "1.0",
+  "type": "expense-seed",
+  "currency": "ETB",
+  "period": {
+    "startDay": 30,
+    "endDay": 2,
+    "label": "Salary cycle"
+  },
+  "plan": {
+    "income": 0,
+    "fixed": 0,
+    "savingsTarget": null
+  },
+  "transactions": [
+    {
+      "id": "seed-001",
+      "day": 30,
+      "amount": 300,
+      "description": "Metshaf gift",
+      "category": "Gifts"
+    },
+    {
+      "id": "seed-002",
+      "day": 30,
+      "amount": 400,
+      "description": "Lunch for me and Bati",
+      "category": "Food",
+      "notes": "Second name is uncertain."
+    },
+    {
+      "id": "seed-003",
+      "day": 30,
+      "amount": 50,
+      "description": "Tip to waiter",
+      "category": "Food"
+    },
+    {
+      "id": "seed-004",
+      "day": 30,
+      "amount": 45,
+      "description": "Taxi to work",
+      "category": "Transport"
+    },
+    {
+      "id": "seed-005",
+      "day": 30,
+      "amount": 50,
+      "description": "Taxi from work",
+      "category": "Transport"
+    },
+    {
+      "id": "seed-006",
+      "day": 30,
+      "amount": 37,
+      "description": "Internet package",
+      "category": "Communication"
+    },
+    {
+      "id": "seed-007",
+      "day": 30,
+      "amount": 260,
+      "description": "Yusuf - buy goods",
+      "category": "Shopping",
+      "notes": "Recipient/name transcription uncertain."
+    },
+    {
+      "id": "seed-008",
+      "day": 1,
+      "amount": 45,
+      "description": "Taxi to work",
+      "category": "Transport",
+      "needsReview": true,
+      "includeInTotals": false,
+      "notes": "This entry appears crossed out in the handwritten record."
+    },
+    {
+      "id": "seed-009",
+      "day": 1,
+      "amount": 1200,
+      "description": "Sent to Senait for family gathering payment",
+      "category": "Family",
+      "notes": "Family gathering description transcribed from handwriting."
+    },
+    {
+      "id": "seed-010",
+      "day": 1,
+      "amount": 200,
+      "description": "Taxi for Tigist, children, Meles and others",
+      "category": "Transport",
+      "notes": "The handwritten route appears to mention Mexico; verify origin and destination."
+    },
+    {
+      "id": "seed-011",
+      "day": 1,
+      "amount": 25,
+      "description": "Internet package",
+      "category": "Communication"
+    },
+    {
+      "id": "seed-012",
+      "day": 1,
+      "amount": 20,
+      "description": "Taxi from Mexico to home",
+      "category": "Transport",
+      "notes": "Destination wording needs verification."
+    },
+    {
+      "id": "seed-013",
+      "day": 1,
+      "amount": 50,
+      "description": "Two injera for dinner and breakfast",
+      "category": "Food"
+    },
+    {
+      "id": "seed-014",
+      "day": 2,
+      "amount": 45,
+      "description": "Taxi to work",
+      "category": "Transport"
+    }
+  ],
+  "summary": {
+    "confirmedExpenseCount": 13,
+    "confirmedTotal": 2682,
+    "pendingReviewCount": 1,
+    "pendingReviewAmount": 45
+  }
+}
