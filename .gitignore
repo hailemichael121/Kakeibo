@@ -17,6 +17,7 @@ ios/App/build
 .idea
 *.apk
 .vite
+.netlify
 coverage
 release
 test-results

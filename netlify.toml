@@ -1,0 +1,97 @@
+[build]
+  command = "npm run build && node scripts/publish-web.mjs"
+  publish = "portfolio latest/files"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# ---- Clean URLs for every page -------------------------------------------
+[[redirects]]
+  from = "/story"
+  to = "/story.html"
+  status = 200
+
+[[redirects]]
+  from = "/practice"
+  to = "/practice.html"
+  status = 200
+
+[[redirects]]
+  from = "/downloads"
+  to = "/downloads.html"
+  status = 200
+
+# Legacy guide page now lives at The Practice
+[[redirects]]
+  from = "/guide"
+  to = "/practice"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/guide.html"
+  to = "/practice"
+  status = 301
+  force = true
+
+# Root and app aliases
+[[redirects]]
+  from = "/home"
+  to = "/"
+  status = 301
+
+[[redirects]]
+  from = "/index.html"
+  to = "/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/app"
+  to = "/web/"
+  status = 301
+
+[[redirects]]
+  from = "/web"
+  to = "/web/"
+  status = 301
+
+# ---- Web app: serve its index for any client-side path -------------------
+[[redirects]]
+  from = "/web/*"
+  to = "/web/index.html"
+  status = 200
+
+# ---- Friendly fallback for unknown pages ---------------------------------
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 404
+
+# ---- Headers --------------------------------------------------------------
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/web/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+

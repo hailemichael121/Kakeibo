@@ -186,21 +186,21 @@
         intro:
           "An AppImage is a single portable file. It needs to be marked executable once before it will start.",
         steps: [
-          "Download <b>Kakeibo-1.0.1.AppImage</b>.",
+          "Download <b>Kakeibo-1.0.2.AppImage</b>.",
           "Make it executable: right-click it and choose <b>Properties → Permissions → Allow executing file as program</b>, or use the command below.",
           "Double-click the file to open Kakeibo. Move it anywhere you like — a folder in your home directory is fine.",
           "If nothing opens on Ubuntu 22.04 or newer, install <b>libfuse2</b> or use the <b>.deb</b> package instead."
         ],
         command: {
           label: "In a terminal, from your Downloads folder",
-          value: "chmod +x Kakeibo-1.0.1.AppImage && ./Kakeibo-1.0.1.AppImage"
+          value: "chmod +x Kakeibo-1.0.2.AppImage && ./Kakeibo-1.0.2.AppImage"
         },
         verify: {
           label: "Check the file before running it",
-          command: "sha256sum Kakeibo-1.0.1.AppImage",
-          expected: "6e2e8b228feeeb36ae7536f00060ffb4a9ce0054440c7f91d2662d708b03016c",
+          command: "sha256sum Kakeibo-1.0.2.AppImage",
+          expected: "e928ad7f48328df132fa80c342ed75773a4e5b539bdb1bfb9dbc7a5ad5db97f9",
           note:
-            "Compare with the <a href=\"./downloads/SHA256SUMS\">SHA256SUMS</a> entry for <b>Kakeibo-1.0.1.AppImage</b>. If the values differ, delete the file and download it again."
+            "Compare with the <a href=\"./downloads/SHA256SUMS\">SHA256SUMS</a> entry for <b>Kakeibo-1.0.2.AppImage</b>. If the values differ, delete the file and download it again."
         },
         note: "Nothing is installed system-wide. Deleting the file removes Kakeibo."
       },
@@ -209,20 +209,20 @@
         intro:
           "The Debian package adds Kakeibo to your applications menu and updates it alongside the rest of your system.",
         steps: [
-          "Download <b>kakeibo_1.0.1_amd64.deb</b>.",
+          "Download <b>kakeibo_1.0.2_amd64.deb</b>.",
           "Double-click it and press <b>Install</b> in your software installer, or use the command below.",
           "Launch <b>Kakeibo</b> from your applications menu."
         ],
         command: {
           label: "In a terminal, from your Downloads folder",
-          value: "sudo apt install ./kakeibo_1.0.1_amd64.deb"
+          value: "sudo apt install ./kakeibo_1.0.2_amd64.deb"
         },
         verify: {
           label: "Check the package before installing it",
-          command: "sha256sum kakeibo_1.0.1_amd64.deb",
-          expected: "0c8c872c4cc63eb6799dd5c75c71298357f95ad5be2fd126b52c805d1e0143be",
+          command: "sha256sum kakeibo_1.0.2_amd64.deb",
+          expected: "7f87c1e6ef634180ec9353bdbbd94437983213777d29f7e8f3edb8952762ac19",
           note:
-            "Compare with the <a href=\"./downloads/SHA256SUMS\">SHA256SUMS</a> entry for <b>kakeibo_1.0.1_amd64.deb</b>. If the values differ, delete the file and download it again."
+            "Compare with the <a href=\"./downloads/SHA256SUMS\">SHA256SUMS</a> entry for <b>kakeibo_1.0.2_amd64.deb</b>. If the values differ, delete the file and download it again."
         },
         note:
           "Keep the <b>./</b> in front of the filename. It tells apt to read the local file instead of searching the repositories."
