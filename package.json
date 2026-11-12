@@ -28,6 +28,7 @@
     "electron": "node desktop/dev.mjs",
     "desktop:dev": "node desktop/dev.mjs",
     "web:publish": "npm run build && node scripts/publish-web.mjs",
+    "social:preview": "node scripts/generate-social-preview.mjs",
     "publish": "node scripts/publish-netlify.mjs && node scripts/publish-github-release.mjs",
     "publish:netlify": "node scripts/publish-netlify.mjs",
     "publish:github": "node scripts/publish-github-release.mjs",
