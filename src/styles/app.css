@@ -987,3 +987,21 @@ html.widget-quick-add #root { background: transparent !important; }
   .factory-reset-row > button { width: 100%; }
   .dialog-card { padding: 17px; border-radius: 22px; }
 }
+
+.privacy-eye { flex: 0 0 36px; }
+.lock-screen { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--base); }
+.lock-card { width: min(420px, 100%); text-align: center; padding: 28px 22px; }
+.lock-logo { width: 52px; height: 52px; margin: 0 auto 12px; }
+.lock-dots { display: flex; justify-content: center; gap: 10px; margin: 16px 0 8px; }
+.lock-dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); }
+.lock-dots i.filled { background: var(--accent); }
+.lock-error { color: var(--danger, #b24f45); font-size: 12px; margin: 8px 0; }
+.lock-bio { margin: 4px auto 10px; }
+.lock-keypad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.lock-key { min-height: 52px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); font-size: 18px; font-weight: 600; }
+.lock-key.muted { font-size: 12px; font-weight: 500; color: var(--muted); }
+.privacy-lock-setup { display: grid; gap: 10px; margin-top: 8px; }
+.privacy-lock-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.privacy-lock-status { align-items: flex-start; }
+.lock-disable-pin { margin-top: 8px; }
+.lock-bio-toggle { margin-top: 4px; }

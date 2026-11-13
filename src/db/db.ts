@@ -79,6 +79,11 @@ export interface AppSettings {
   reminderNightTime?: string // HH:mm
   reminderWeeklyEnabled?: boolean
   reminderWeeklyDay?: number // 0 Sun - 6 Sat
+  amountsHidden?: boolean
+  lockEnabled?: boolean
+  lockPinHash?: string
+  lockPinSalt?: string
+  lockUseBiometric?: boolean
 }
 
 export interface AuditEntry {
@@ -170,6 +175,9 @@ export const defaultSettings = (): AppSettings => ({
   reminderNightTime: '21:00',
   reminderWeeklyEnabled: true,
   reminderWeeklyDay: 0,
+  amountsHidden: true,
+  lockEnabled: false,
+  lockUseBiometric: true,
 })
 
 export function monthKey(date = new Date(), startDay = 1): string {

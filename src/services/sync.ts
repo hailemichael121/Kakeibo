@@ -238,6 +238,11 @@ function mergeSettings(local: AppSettings | undefined, incoming: AppSettings): A
     theme: local.theme,
     language: local.language,
     onboarded: local.onboarded || incoming.onboarded,
+    amountsHidden: local.amountsHidden ?? incoming.amountsHidden,
+    lockEnabled: local.lockEnabled ?? incoming.lockEnabled,
+    lockPinHash: local.lockPinHash ?? incoming.lockPinHash,
+    lockPinSalt: local.lockPinSalt ?? incoming.lockPinSalt,
+    lockUseBiometric: local.lockUseBiometric ?? incoming.lockUseBiometric,
     updatedAt: new Date(Math.max(timestamp(local), timestamp(incoming))).toISOString(),
   }
 }

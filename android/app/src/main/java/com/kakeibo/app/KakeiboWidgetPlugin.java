@@ -41,7 +41,20 @@ public class KakeiboWidgetPlugin extends Plugin {
         String spendableLeft = call.getString("spendableLeft", "—");
         String spendable = call.getString("spendable", "—");
         String spent = call.getString("spent", "—");
-        KakeiboWidgetProvider.saveValues(getContext(), spendableLeft, spendable, spent);
+        String hiddenSpendableLeft = call.getString("hiddenSpendableLeft", KakeiboWidgetProvider.maskDigits(spendableLeft));
+        String hiddenSpendable = call.getString("hiddenSpendable", KakeiboWidgetProvider.maskDigits(spendable));
+        String hiddenSpent = call.getString("hiddenSpent", KakeiboWidgetProvider.maskDigits(spent));
+        boolean appAmountsHidden = call.getBoolean("amountsHidden", true);
+        KakeiboWidgetProvider.saveValues(
+            getContext(),
+            spendableLeft,
+            spendable,
+            spent,
+            hiddenSpendableLeft,
+            hiddenSpendable,
+            hiddenSpent,
+            appAmountsHidden
+        );
         call.resolve();
     }
 

@@ -4,10 +4,11 @@ import { jsPDF } from 'jspdf'
 import {
   ArrowDownToLine, ArrowLeft, ArrowUpFromLine, BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight,
   CircleHelp, Clock3, Coffee, Download, FileSpreadsheet, Heart, House, Info,
+  Eye, EyeOff,
   MoreHorizontal, Pencil, Plus, RefreshCw, Search, SettingsIcon, ShoppingBag, Smartphone, Sun, Trash2, Umbrella, Wallet, X,
    Home, BookOpen as BookOpenIcon, BarChart3 as BarChartIcon, Clock3 as ClockIcon, Heart as HeartIcon
 } from 'lucide-react'
-import { db, amountText, defaultSettings, monthKey, uid, type AppSettings, type AuditEntry, type Category, type Expense, type MonthPlan } from '@/db/db'
+import { db, defaultSettings, monthKey, uid, type AppSettings, type AuditEntry, type Category, type Expense, type MonthPlan } from '@/db/db'
 import { ensureSettings, deleteExpense, recordAudit, resetAllData, restoreExpense, saveExpense, savePlan, saveReflection, saveSettings, type SaveExpenseInput } from '@/db/repo'
 import { recoverSafetyMirror, writeSafetyMirror } from '@/db/safety'
 import { calculateBudget, categoryPercent } from '@/domain/budget'
@@ -30,6 +31,10 @@ import { DatePicker } from './DatePicker'
 import { setCalendarPreference, useCalendarPreference } from '@/lib/calendarPreference'
 import type { CalendarLanguage, CalendarSystem } from '@/lib/ethiopianCalendar'
 import { confirmDialog, DialogHost, noticeDialog, promptDialog } from './Dialog'
+import { displayAmount, amountsHiddenByDefault, maskAmountText, plainAmountText } from '@/lib/privacy'
+import { AmountPrivacyContext, useAmountsHidden } from './AmountPrivacyContext'
+import { LockScreen } from './LockScreen'
+import { AppPrivacySettings } from './AppPrivacySettings'
 
 type Screen = 'Home' | 'Insights' | 'History' | 'Journal' | 'Settings' | 'Ritual' | 'Audit' | 'Sync' | 'About'
 const SCREEN_NAMES: Screen[] = ['Home', 'Insights', 'History', 'Journal', 'Settings', 'Ritual', 'Audit', 'Sync', 'About']
@@ -54,13 +59,14 @@ function localDay(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function currencyAmount(amount: number, currency: string): string {
-  try { return amountText(amount, currency) } catch { return `${currency} ${amount.toLocaleString()}` }
-}
-
 function getMonthTitle(value: string): string {
   const [year, month] = value.split('-').map(Number)
   return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+}
+
+function useMoneyFormatter() {
+  const hidden = useAmountsHidden()
+  return useCallback((amount: number, currency: string) => displayAmount(amount, currency, hidden), [hidden])
 }
 
 export function App() {
@@ -87,6 +93,8 @@ export function App() {
   const calendarRef = useRef<HTMLDivElement>(null)
   const widgetQuickAdd = useMemo(() => launchParams.has('widgetQuickAdd'), [launchParams])
   const [widgetNudgeVisible, setWidgetNudgeVisible] = useState(() => canAddHomeWidget() && window.localStorage.getItem('kakeibo.widgetNudgeSeen') !== '1')
+  const [appLocked, setAppLocked] = useState(false)
+  const lockReady = useRef(false)
 
   const refresh = useCallback(async (options?: { realignMonth?: boolean }) => {
     await recoverSafetyMirror()
@@ -117,6 +125,10 @@ export function App() {
     setAudit(logs)
     applyTheme(nextSettings.theme)
     setIsLoading(false)
+    if (!lockReady.current) {
+      lockReady.current = true
+      setAppLocked(Boolean(nextSettings.lockEnabled))
+    }
     void updateHomeWidget(monthPlan, activeMonthExpenses, nextSettings)
     void scheduleKakeiboReminders(nextSettings)
   }, [month])
@@ -185,7 +197,7 @@ export function App() {
     if (!item) return
     const confirmed = await confirmDialog({
       title: 'Delete this expense?',
-      message: `${currencyAmount(item.amount, settings.currency)} · ${item.category}`,
+      message: `${displayAmount(item.amount, settings.currency, amountsHiddenByDefault(settings))} · ${item.category}`,
       detail: 'You can undo this right after deleting.',
       confirmLabel: 'Delete expense',
       tone: 'danger',
@@ -202,6 +214,17 @@ export function App() {
     await refresh()
     setToast(undefined)
     void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings)
+  }
+
+  async function toggleAmountVisibility() {
+    const nextHidden = !amountsHiddenByDefault(settings)
+    try {
+      const next = await saveSettings({ amountsHidden: nextHidden })
+      setSettings(next)
+      void updateHomeWidget(plan, expenses.filter((expense) => !expense.deletedAt), next)
+    } catch {
+      notify('Could not update amount privacy')
+    }
   }
 
   async function handleSaveSettings(patch: Partial<AppSettings>) {
@@ -286,6 +309,15 @@ export function App() {
   }
 
   if (isLoading) return <LoadingSkeleton />
+  if (appLocked && settings.lockEnabled) {
+    return (
+      <AmountPrivacyContext.Provider value={amountsHiddenByDefault(settings)}>
+        <LockScreen settings={settings} onUnlocked={() => setAppLocked(false)} />
+        <DialogHost />
+      </AmountPrivacyContext.Provider>
+    )
+  }
+  const amountsHidden = amountsHiddenByDefault(settings)
   const monthControl = <div className="month-control" ref={calendarRef}>
     <button aria-label="Previous month" onClick={() => shiftMonth(-1)}><ChevronLeft size={17} /></button>
     <button className="month-trigger" aria-label="Open month calendar" aria-expanded={calendarOpen} onClick={() => setCalendarOpen((open) => !open)}><CalendarDays size={14} /><span>{getMonthTitle(month)}</span></button>
@@ -313,6 +345,7 @@ export function App() {
   }
 
   return (
+    <AmountPrivacyContext.Provider value={amountsHidden}>
     <div className="app-shell">
       <aside className="sidebar">
         <button className="brand" onClick={() => setScreen('Home')}><img className="brand-logo" src="./kakeibo.png" alt="" /><span>Kakeibo</span></button>
@@ -332,13 +365,25 @@ export function App() {
             <div className="topbar-brand"><h1>Kakeibo</h1><p>A little more mindful</p></div>
             <div className="topbar-page-title"><div className="eyebrow">{screen === 'Home' ? 'A little more mindful' : screen}</div><h1>{screen === 'Home' ? 'Your month, gently.' : screen === 'Ritual' ? 'Your monthly ritual' : screen === 'Audit' ? 'A record of your choices' : screen === 'Sync' ? 'Sync devices' : screen === 'About' ? 'About Kakeibo' : screen}</h1></div>
           </div>
-          <div className="top-actions">{monthControl}</div>
+          <div className="top-actions">
+            <button
+              className="icon-button privacy-eye"
+              type="button"
+              aria-pressed={amountsHidden}
+              aria-label={amountsHidden ? 'Show amounts' : 'Hide amounts'}
+              title={amountsHidden ? 'Show amounts' : 'Hide amounts'}
+              onClick={() => void toggleAmountVisibility()}
+            >
+              {amountsHidden ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+            {monthControl}
+          </div>
         </header>
         {screen === 'Home' && <HomeScreen budget={budget} plan={plan} month={month} expenses={expenses} settings={settings} categories={activeCategories} onAdd={openNewExpense} onEdit={(e) => { setEditing(e); setExpenseOpen(true) }} onDelete={handleDelete} onRitual={() => setScreen('Ritual')} onInsights={() => setScreen('Insights')} onPlanSaved={async (values) => { await savePlan({ ...values, id: month }); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onSetupComplete={() => void handleSaveSettings({ onboarded: true })} showWidgetNudge={widgetNudgeVisible && settings.onboarded} onAddWidget={() => void handleAddWidgetFromNudge()} onDismissWidgetNudge={dismissWidgetNudge} />}
         {screen === 'Insights' && <InsightsScreen expenses={expenses} budget={budget} categories={activeCategories} currency={settings.currency} previousSpent={previousSpent} />}
         {screen === 'History' && <HistoryScreen expenses={expenses} categories={activeCategories} currency={settings.currency} search={search} onSearch={setSearch} filter={filterCategory} onFilter={setFilterCategory} onEdit={(e) => { setEditing(e); setExpenseOpen(true) }} onDelete={handleDelete} onExport={() => void exportExcel(expenses, settings.currency, month, notify)} onPdf={() => void exportPdf(expenses, settings.currency, month, notify)} onImport={(rows) => void importExpenses(rows, settings, refresh, notify)} />}
         {screen === 'Journal' && <JournalScreen onChanged={refresh} notify={notify} />}
-        {screen === 'Settings' && <SettingsScreen settings={settings} plan={plan} onSave={handleSaveSettings} onPlanSave={async (values) => { await savePlan({ ...values, id: month }); await refresh(); notify('Monthly plan saved'); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onDemoChange={async (enabled) => { await toggleDemo(enabled, settings, handleSaveSettings, month); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onExport={() => void exportBackup(notify)} onImport={(source) => importBackup(source, refresh, notify)} onAudit={() => setScreen('Audit')} onSync={() => setScreen('Sync')} onAbout={() => setScreen('About')} onFactoryReset={handleFactoryReset} onAddWidget={canAddHomeWidget() ? () => void handleAddWidget() : undefined} />}
+        {screen === 'Settings' && <SettingsScreen settings={settings} plan={plan} onSave={handleSaveSettings} onLockStateChange={setAppLocked} onPlanSave={async (values) => { await savePlan({ ...values, id: month }); await refresh(); notify('Monthly plan saved'); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onDemoChange={async (enabled) => { await toggleDemo(enabled, settings, handleSaveSettings, month); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onExport={() => void exportBackup(notify)} onImport={(source) => importBackup(source, refresh, notify)} onAudit={() => setScreen('Audit')} onSync={() => setScreen('Sync')} onAbout={() => setScreen('About')} onFactoryReset={handleFactoryReset} onAddWidget={canAddHomeWidget() ? () => void handleAddWidget() : undefined} />}
         {screen === 'Ritual' && <RitualScreen step={ritualStep} onStep={setRitualStep} month={month} plan={plan} reflection={reflection} budget={budget} expenses={expenses} settings={settings} onPlanSaved={async (values) => { await savePlan({ ...values, id: month }); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onReflected={async (chips, note) => { await saveReflection({ id: month, chips, note }); await refresh(); notify('Reflection saved') }} />}
         {screen === 'Audit' && <AuditScreen logs={audit} search={search} onSearch={setSearch} />}
         {screen === 'Sync' && <SyncScreen onBack={() => setScreen('Settings')} onMerged={refresh} notify={notify} />}
@@ -353,6 +398,7 @@ export function App() {
       {toast && <div className="toast" role="status">{toast.text}{toast.id && <button onClick={() => void undoDelete(toast.id!)}>Undo</button>}<button className="toast-close" aria-label="Dismiss" onClick={() => setToast(undefined)}><X size={15} /></button></div>}
       <DialogHost />
     </div>
+    </AmountPrivacyContext.Provider>
   )
 }
 
@@ -374,10 +420,11 @@ function CategoryIcon({ category, size = 17 }: { category: Category; size?: numb
 }
 
 function SpendRing({ left, spendable, currency, savings }: { left: number; spendable: number; currency: string; savings: number }) {
+  const money = useMoneyFormatter()
   const progress = spendable > 0 ? Math.max(0, Math.min(100, (left / spendable) * 100)) : 0
   const circumference = 2 * Math.PI * 40
   return <div className="spend-card glass widget-card spend-card-row">
-    <div className="spend-info"><span className="overline">SPENDABLE LEFT</span><strong className="spend-number">{currencyAmount(left, currency)}</strong><span className="spend-caption">after fixed costs{savings ? ' and your savings target' : ''}</span><div className="spend-total">Monthly spendable <b>{currencyAmount(spendable, currency)}</b></div></div>
+    <div className="spend-info"><span className="overline">SPENDABLE LEFT</span><strong className="spend-number">{money(left, currency)}</strong><span className="spend-caption">after fixed costs{savings ? ' and your savings target' : ''}</span><div className="spend-total">Monthly spendable <b>{money(spendable, currency)}</b></div></div>
     <div className="ring ring-side"><svg viewBox="0 0 100 100" aria-label={`${Math.round(progress)} percent spendable left`}><circle className="ring-track" cx="50" cy="50" r="40" /><circle className="ring-progress" cx="50" cy="50" r="40" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - progress / 100)} /></svg><div className="ring-inner"><span>{Math.round(progress)}%</span><small>left</small></div></div>
   </div>
 }
@@ -389,6 +436,7 @@ function HomeScreen({ budget, plan, month, expenses, settings, categories, onAdd
   onAdd: () => void; onEdit: (expense: Expense) => void; onDelete: (id: string) => void; onRitual: () => void; onInsights: () => void; onPlanSaved: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onSetupComplete: () => void
   showWidgetNudge: boolean; onAddWidget: () => void; onDismissWidgetNudge: () => void
 }) {
+  const money = useMoneyFormatter()
   const hasPlan = !!plan
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
@@ -401,12 +449,12 @@ function HomeScreen({ budget, plan, month, expenses, settings, categories, onAdd
       <div className="widget-nudge-actions"><button className="button-primary widget-nudge-add" onClick={onAddWidget}>Add widget</button><button className="icon-button widget-nudge-close" aria-label="Not now" onClick={onDismissWidgetNudge}><X size={15} /></button></div>
     </section>}
     <SpendRing left={budget.spendableLeft} spendable={budget.spendable} currency={settings.currency} savings={budget.savings} />
-    {budget.startingSpent > 0 && <p className="starting-spend-note">Spendable left includes {currencyAmount(budget.startingSpent, settings.currency)} spent before Kakeibo.</p>}
+    {budget.startingSpent > 0 && <p className="starting-spend-note">Spendable left includes {money(budget.startingSpent, settings.currency)} spent before Kakeibo.</p>}
     {!hasPlan && <button className="setup-nudge" onClick={onRitual}><span className="nudge-icon"><Heart size={17} /></span><span><b>Begin with your plan</b><small>Add income and fixed costs to see your spendable amount.</small></span><ChevronRight size={19} /></button>}
     <div className="section-head"><div><span className="overline">YOUR MONTH</span><h2>Spending by category</h2></div><button className="text-button" onClick={onInsights}>Insights <ChevronRight size={15} /></button></div>
     <section className="category-grid">{categories.map((category) => {
       const total = budget.byCategory.get(category.name) ?? 0
-      return <div key={category.id} className="category-card soft-card"><div className="cat-card-head"><CategoryIcon category={category} /><span className="category-label">{category.name}</span></div><strong>{currencyAmount(total, settings.currency)}</strong><div className="mini-track"><i style={{ width: `${categoryPercent(total, budget.trackedSpent)}%`, background: category.color }} /></div><small>{budget.trackedSpent ? Math.round(categoryPercent(total, budget.trackedSpent)) : 0}% of tracked spending</small></div>
+      return <div key={category.id} className="category-card soft-card"><div className="cat-card-head"><CategoryIcon category={category} /><span className="category-label">{category.name}</span></div><strong>{money(total, settings.currency)}</strong><div className="mini-track"><i style={{ width: `${categoryPercent(total, budget.trackedSpent)}%`, background: category.color }} /></div><small>{budget.trackedSpent ? Math.round(categoryPercent(total, budget.trackedSpent)) : 0}% of tracked spending</small></div>
     })}</section>
     <section className="two-col">
       <div className="panel recent-panel"><div className="section-head compact"><div><span className="overline">RECENT</span><h2>Last few choices</h2></div><button className="icon-link" aria-label="Open history" onClick={() => onInsights()}><ChevronRight size={17} /></button></div>
@@ -430,13 +478,18 @@ function CalendarPopover({ month, startDay, expenses, categories, currency, sele
   onDelete: (id: string) => void
   onClose: () => void
 }) {
+  const money = useMoneyFormatter()
+  const hidden = useAmountsHidden()
   const { dates, first, last } = getBudgetCalendarDates(month, startDay)
   const totals = summarizeExpensesByLocalDay(expenses)
   const maxDailySpend = Math.max(0, ...[...totals.values()].map(({ amount }) => amount))
   const dayExpenses = expenses.filter((expense) => localDateKey(new Date(expense.date)) === selectedDay)
   const selectedTotal = totals.get(selectedDay)?.amount ?? 0
   const today = localDateKey(new Date())
-  const abbreviatedAmount = (amount: number) => new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(amount)
+  const abbreviatedAmount = (amount: number) => {
+    const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(amount)
+    return hidden ? maskAmountText(compact) : compact
+  }
   const periodLabel = startDay === 1
     ? ''
     : `${first.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${last.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
@@ -456,9 +509,9 @@ function CalendarPopover({ month, startDay, expenses, categories, currency, sele
         return <button
           key={key}
           className={`calendar-day ${belongsToPeriod ? '' : 'outside-period'} ${key === today ? 'today' : ''} ${selectedDay === key ? 'selected' : ''} ${level ? `spend-level-${level}` : ''}`}
-          aria-label={`${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}${total ? `, ${total.count} expenses, ${currencyAmount(total.amount, currency)}` : ', no expenses'}`}
+          aria-label={`${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}${total ? `, ${total.count} expenses, ${money(total.amount, currency)}` : ', no expenses'}`}
           aria-pressed={selectedDay === key}
-          title={total ? currencyAmount(total.amount, currency) : 'No expenses'}
+          title={total ? money(total.amount, currency) : 'No expenses'}
           onClick={() => onSelectDay(key, monthKey(date, startDay))}
         >
           <span>{date.getDate()}</span>
@@ -468,7 +521,7 @@ function CalendarPopover({ month, startDay, expenses, categories, currency, sele
     </div>
     <div className="calendar-legend"><span>Daily spending</span><i className="spend-level-1" /><i className="spend-level-2" /><i className="spend-level-3" /><i className="spend-level-4" /></div>
     {selectedDay && <section className="calendar-day-details" aria-live="polite">
-      <header><div><h3>{new Date(`${selectedDay}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</h3><small>{dayExpenses.length} {dayExpenses.length === 1 ? 'expense' : 'expenses'} · {currencyAmount(selectedTotal, currency)}</small></div></header>
+      <header><div><h3>{new Date(`${selectedDay}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</h3><small>{dayExpenses.length} {dayExpenses.length === 1 ? 'expense' : 'expenses'} · {money(selectedTotal, currency)}</small></div></header>
       {dayExpenses.length
         ? <div className="expense-list compact-list">{dayExpenses.map((expense) => <ExpenseRow key={expense.id} expense={expense} category={categories.find((category) => category.name === expense.category)} currency={currency} onEdit={onEdit} onDelete={onDelete} />)}</div>
         : <p className="calendar-empty">No expenses recorded for this day.</p>}
@@ -480,6 +533,7 @@ function OnboardingCard({ settings, month, plan, onSave, onComplete }: {
   settings: AppSettings; month: string; plan?: MonthPlan
   onSave: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onComplete: () => void
 }) {
+  const money = useMoneyFormatter()
   const [income, setIncome] = useState(String(plan?.income ?? ''))
   const [fixed, setFixed] = useState(String(plan?.fixed ?? ''))
   const [startingSpent, setStartingSpent] = useState(String(plan?.startingSpent ?? ''))
@@ -534,7 +588,7 @@ function OnboardingCard({ settings, month, plan, onSave, onComplete }: {
       <h2>Would you like a savings target?</h2>
       <p>It is completely optional. Kakeibo works fully without one.</p>
       <label className="onboard-amount">{settings.currency}<input autoFocus type="number" min="0" inputMode="decimal" placeholder="Skip if you like" value={savings} onChange={(event) => setSavings(event.target.value)} /></label>
-      <div className="onboard-spendable"><span>Spendable left to start</span><b>{currencyAmount(spendable, settings.currency)}</b></div>
+      <div className="onboard-spendable"><span>Spendable left to start</span><b>{money(spendable, settings.currency)}</b></div>
     </>}
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className="onboard-actions">
@@ -636,6 +690,7 @@ function AboutScreen({ categories, onBack }: { categories: Category[]; onBack: (
 }
 
 function ExpenseRow({ expense, category, currency, onEdit, onDelete }: { expense: Expense; category?: Category; currency: string; onEdit: (expense: Expense) => void; onDelete: (id: string) => void }) {
+  const money = useMoneyFormatter()
   const touchStart = useRef<number | null>(null)
   const details = [
     expense.from && expense.to ? `${expense.from} → ${expense.to}` : expense.from ? `From ${expense.from}` : expense.to ? `To ${expense.to}` : '',
@@ -647,7 +702,7 @@ function ExpenseRow({ expense, category, currency, onEdit, onDelete }: { expense
     touchStart.current = null
     if (distance < -65) onDelete(expense.id)
     else if (distance > 65) onEdit(expense)
-  }}><CategoryIcon category={category ?? { id: 'other', name: expense.category, icon: 'ShoppingBag', color: '#A8ACCB', archived: false }} /><div className="expense-main"><strong>{expense.note || expense.category}</strong><small>{expense.category} <span>·</span> {new Date(expense.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{expense.pause && <> <span>·</span> {expense.pause}</>}{details && <> <span>·</span> {details}</>}</small></div><strong className="expense-amount">{currencyAmount(expense.amount, currency)}</strong><div className="row-actions"><button title="Edit expense" onClick={() => onEdit(expense)}><Pencil size={14} /></button><button title="Delete expense" onClick={() => onDelete(expense.id)}><Trash2 size={14} /></button></div></div>
+  }}><CategoryIcon category={category ?? { id: 'other', name: expense.category, icon: 'ShoppingBag', color: '#A8ACCB', archived: false }} /><div className="expense-main"><strong>{expense.note || expense.category}</strong><small>{expense.category} <span>·</span> {new Date(expense.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{expense.pause && <> <span>·</span> {expense.pause}</>}{details && <> <span>·</span> {details}</>}</small></div><strong className="expense-amount">{money(expense.amount, currency)}</strong><div className="row-actions"><button title="Edit expense" onClick={() => onEdit(expense)}><Pencil size={14} /></button><button title="Delete expense" onClick={() => onDelete(expense.id)}><Trash2 size={14} /></button></div></div>
 }
 
 function EmptyState({ title, detail }: { title: string; detail: string }) {
@@ -719,6 +774,7 @@ function ExpenseSheet({ expense, categories, currency, onClose, onSave }: {
 }
 
 function InsightsScreen({ expenses, budget, categories, currency, previousSpent }: { expenses: Expense[]; budget: ReturnType<typeof calculateBudget>; categories: Category[]; currency: string; previousSpent: number }) {
+  const money = useMoneyFormatter()
   const wantedTotal = budget.wanted + budget.needed
   const wantedPct = wantedTotal ? Math.round((budget.wanted / wantedTotal) * 100) : 0
   const daily = new Array(7).fill(0).map((_, index) => {
@@ -732,12 +788,12 @@ function InsightsScreen({ expenses, budget, categories, currency, previousSpent 
   const startingLength = budget.spent ? budget.startingSpent / budget.spent * donutCircumference : 0
   let donutOffset = 0
   return <div className="page-stack">
-    <section className="insight-top panel"><div><span className="overline">THIS MONTH</span><h2>Every little choice adds up.</h2><p>Your spending, seen with kindness.</p></div><div className="insight-total"><strong>{currencyAmount(budget.spent, currency)}</strong><small>{budget.startingSpent ? `${currencyAmount(budget.startingSpent, currency)} before Kakeibo` : 'total spent'}</small></div></section>
+    <section className="insight-top panel"><div><span className="overline">THIS MONTH</span><h2>Every little choice adds up.</h2><p>Your spending, seen with kindness.</p></div><div className="insight-total"><strong>{money(budget.spent, currency)}</strong><small>{budget.startingSpent ? `${money(budget.startingSpent, currency)} before Kakeibo` : 'total spent'}</small></div></section>
     <div className="insight-grid">
-      <section className="panel chart-panel"><div className="section-head compact"><div><span className="overline">WHERE IT WENT</span><h2>By category</h2></div></div><div className="donut-wrap"><div className="donut"><svg viewBox="0 0 100 100" aria-label="Spending by category"><circle className="donut-track" cx="50" cy="50" r="43" />{circles.map(({ category, value }) => { const length = budget.spent ? value / budget.spent * donutCircumference : 0; const offset = donutOffset; donutOffset += length; return <circle key={category.id} cx="50" cy="50" r="43" fill="none" stroke={category.color} strokeWidth="12" strokeDasharray={`${length} ${donutCircumference - length}`} strokeDashoffset={-offset} /> })}{startingLength > 0 && <circle cx="50" cy="50" r="43" fill="none" stroke="var(--faint)" strokeWidth="12" strokeDasharray={`${startingLength} ${donutCircumference - startingLength}`} strokeDashoffset={-donutOffset} />}</svg><div><strong>{currencyAmount(budget.spent, currency)}</strong><small>spent</small></div></div><div className="donut-legend">{categories.map((c) => <div key={c.id}><i style={{ background: c.color }} /><span>{c.name}</span><b>{currencyAmount(budget.byCategory.get(c.name) ?? 0, currency)}</b></div>)}{budget.startingSpent > 0 && <div><i className="untracked-spend-dot" /><span>Before Kakeibo</span><b>{currencyAmount(budget.startingSpent, currency)}</b></div>}</div></div></section>
+      <section className="panel chart-panel"><div className="section-head compact"><div><span className="overline">WHERE IT WENT</span><h2>By category</h2></div></div><div className="donut-wrap"><div className="donut"><svg viewBox="0 0 100 100" aria-label="Spending by category"><circle className="donut-track" cx="50" cy="50" r="43" />{circles.map(({ category, value }) => { const length = budget.spent ? value / budget.spent * donutCircumference : 0; const offset = donutOffset; donutOffset += length; return <circle key={category.id} cx="50" cy="50" r="43" fill="none" stroke={category.color} strokeWidth="12" strokeDasharray={`${length} ${donutCircumference - length}`} strokeDashoffset={-offset} /> })}{startingLength > 0 && <circle cx="50" cy="50" r="43" fill="none" stroke="var(--faint)" strokeWidth="12" strokeDasharray={`${startingLength} ${donutCircumference - startingLength}`} strokeDashoffset={-donutOffset} />}</svg><div><strong>{money(budget.spent, currency)}</strong><small>spent</small></div></div><div className="donut-legend">{categories.map((c) => <div key={c.id}><i style={{ background: c.color }} /><span>{c.name}</span><b>{money(budget.byCategory.get(c.name) ?? 0, currency)}</b></div>)}{budget.startingSpent > 0 && <div><i className="untracked-spend-dot" /><span>Before Kakeibo</span><b>{money(budget.startingSpent, currency)}</b></div>}</div></div></section>
       <section className="panel chart-panel"><div className="section-head compact"><div><span className="overline">THIS WEEK</span><h2>A gentle rhythm</h2></div></div><div className="weekly-chart">{daily.map(({ day, value }, i) => <div key={i} className="bar-col"><div className="bar-slot"><i style={{ height: `${value ? Math.max(5, value / max * 100) : 3}%`, opacity: value ? 1 : .22 }} /></div><small>{day}</small></div>)}</div><div className="chart-caption">Spent day by day</div></section>
-      <section className="panel ratio-panel"><span className="overline">WANTED VS NEEDED</span><h2>Spend with intention.</h2><div className="ratio-rail"><i style={{ width: `${wantedPct}%` }} /></div><div className="ratio-legend"><span><i className="want-dot" />Wanted <b>{currencyAmount(budget.wanted, currency)}</b></span><span><i className="need-dot" />Needed <b>{currencyAmount(budget.needed, currency)}</b></span></div><small>{budget.wanted || budget.needed ? `${wantedPct}% of tagged spending was wanted.` : 'Your pause tags will show up here.'}</small></section>
-      <section className="panel month-compare"><span className="overline">MONTH AT A GLANCE</span><h2>A few kind numbers.</h2><div><span>Income</span><b>{currencyAmount(budget.income, currency)}</b></div><div><span>Fixed costs</span><b>{currencyAmount(budget.fixed, currency)}</b></div><div><span>Savings target</span><b>{budget.savings ? currencyAmount(budget.savings, currency) : 'Not set'}</b></div><div className="compare-last"><span>Spent so far</span><b>{currencyAmount(budget.spent, currency)}</b></div><div className="month-change"><span>Last month</span><b>{currencyAmount(previousSpent, currency)}</b><small>{previousSpent ? `${budget.spent >= previousSpent ? '+' : '−'}${Math.round(Math.abs(budget.spent - previousSpent) / previousSpent * 100)}%` : 'No earlier data'}</small></div></section>
+      <section className="panel ratio-panel"><span className="overline">WANTED VS NEEDED</span><h2>Spend with intention.</h2><div className="ratio-rail"><i style={{ width: `${wantedPct}%` }} /></div><div className="ratio-legend"><span><i className="want-dot" />Wanted <b>{money(budget.wanted, currency)}</b></span><span><i className="need-dot" />Needed <b>{money(budget.needed, currency)}</b></span></div><small>{budget.wanted || budget.needed ? `${wantedPct}% of tagged spending was wanted.` : 'Your pause tags will show up here.'}</small></section>
+      <section className="panel month-compare"><span className="overline">MONTH AT A GLANCE</span><h2>A few kind numbers.</h2><div><span>Income</span><b>{money(budget.income, currency)}</b></div><div><span>Fixed costs</span><b>{money(budget.fixed, currency)}</b></div><div><span>Savings target</span><b>{budget.savings ? money(budget.savings, currency) : 'Not set'}</b></div><div className="compare-last"><span>Spent so far</span><b>{money(budget.spent, currency)}</b></div><div className="month-change"><span>Last month</span><b>{money(previousSpent, currency)}</b><small>{previousSpent ? `${budget.spent >= previousSpent ? '+' : '−'}${Math.round(Math.abs(budget.spent - previousSpent) / previousSpent * 100)}%` : 'No earlier data'}</small></div></section>
     </div>
   </div>
 }
@@ -751,6 +807,7 @@ function formatImportDate(value: string): string {
 function HistoryScreen({ expenses, categories, currency, search, onSearch, filter, onFilter, onEdit, onDelete, onExport, onPdf, onImport }: {
   expenses: Expense[]; categories: Category[]; currency: string; search: string; onSearch: (value: string) => void; filter: string; onFilter: (value: string) => void; onEdit: (expense: Expense) => void; onDelete: (id: string) => void; onExport: () => void; onPdf: () => void; onImport: (rows: ImportRow[]) => void
 }) {
+  const money = useMoneyFormatter()
   const [preview, setPreview] = useState<ParsedImportFile>()
   const [importError, setImportError] = useState('')
   const [reading, setReading] = useState(false)
@@ -781,7 +838,7 @@ function HistoryScreen({ expenses, categories, currency, search, onSearch, filte
   }
 
   return <div className="panel history-panel"><div className="history-toolbar"><label className="search-field"><Search size={16} /><input placeholder="Search expenses" value={search} onChange={(e) => onSearch(e.target.value)} /></label><Select ariaLabel="Filter by category" value={filter} onChange={onFilter} options={[{ value: 'All', label: 'All categories' }, ...categories.map((c) => ({ value: c.name, label: c.name }))]} /><div className="history-actions"><button className="button-quiet" onClick={onExport}><FileSpreadsheet size={15} /> Excel</button><button className="button-quiet" onClick={onPdf}><Download size={15} /> PDF</button><label className="button-quiet file-import"><ArrowUpFromLine size={15} /> Import<input type="file" accept=".json,.xlsx,.xls,.csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setReading(true); setImportError(''); void parseImportFile(file, categories.map((category) => category.name)).then((result) => { if (!result.rows.length && !result.pending.length) throw new Error('No valid expenses found. Check amounts, dates, and categories.'); setPreview(result) }).catch((error: unknown) => setImportError(error instanceof Error ? error.message : 'Could not read this file.')).finally(() => setReading(false)) } e.currentTarget.value = '' }} /></label></div></div>
-    {byDay.size ? [...byDay.entries()].map(([day, items]) => <section className="history-day" key={day}><div className="day-head"><span>{new Date(day + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span><b>{currencyAmount(items.reduce((sum, e) => sum + e.amount, 0), currency)}</b></div>{items.map((e) => <ExpenseRow key={e.id} expense={e} category={categories.find((c) => c.name === e.category)} currency={currency} onEdit={onEdit} onDelete={onDelete} />)}</section>) : <EmptyState title={search ? 'Nothing found.' : 'No choices yet.'} detail={search ? 'Try another search.' : 'Add your first expense when you’re ready.'} />}
+    {byDay.size ? [...byDay.entries()].map(([day, items]) => <section className="history-day" key={day}><div className="day-head"><span>{new Date(day + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span><b>{money(items.reduce((sum, e) => sum + e.amount, 0), currency)}</b></div>{items.map((e) => <ExpenseRow key={e.id} expense={e} category={categories.find((c) => c.name === e.category)} currency={currency} onEdit={onEdit} onDelete={onDelete} />)}</section>) : <EmptyState title={search ? 'Nothing found.' : 'No choices yet.'} detail={search ? 'Try another search.' : 'Add your first expense when you’re ready.'} />}
     {importError && <p className="import-error" role="alert">{importError}</p>}
     {reading && <div className="import-status">Reading your file…</div>}
     {preview && <ImportPreviewDialog preview={preview} categories={categories} currency={currency} onCancel={() => setPreview(undefined)} onConfirm={confirmImport} onPeriodChange={updatePeriod} />}
@@ -796,6 +853,7 @@ function ImportPreviewDialog({ preview, categories, currency, onCancel, onConfir
   onConfirm: (rows: ImportRow[]) => void
   onPeriodChange: (start: string, end: string) => void
 }) {
+  const money = useMoneyFormatter()
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const detected = preview.rows.length + preview.pending.length
   const ready = preview.rows.length
@@ -818,7 +876,7 @@ function ImportPreviewDialog({ preview, categories, currency, onCancel, onConfir
       <p>{preview.fileName} · {detected} detected · {ready} ready to import{preview.skipped ? ` · ${preview.skipped} rows skipped` : ''}</p>
       <div className="import-summary">
         <div><span>Detected</span><b>{detected} {detected === 1 ? 'expense' : 'expenses'}</b></div>
-        <div><span>Total amount</span><b>{currencyAmount(total, currency)}</b></div>
+        <div><span>Total amount</span><b>{money(total, currency)}</b></div>
         <div><span>Date range</span><b>{dateRange}</b></div>
         <div><span>Categories</span><b>{detectedCategories.join(', ') || 'None'}</b></div>
       </div>
@@ -843,7 +901,7 @@ function ImportPreviewDialog({ preview, categories, currency, onCancel, onConfir
       </div>}
       <div className="preview-rows">
         <div className="preview-heading"><span>Date</span><span>Category</span><span>Amount</span></div>
-        {items.slice(0, 5).map((row) => <div key={row.key}><span>{row.date}</span><span>{row.category}</span><b>{currencyAmount(row.amount, currency)}</b></div>)}
+        {items.slice(0, 5).map((row) => <div key={row.key}><span>{row.date}</span><span>{row.category}</span><b>{money(row.amount, currency)}</b></div>)}
         {items.length > 5 && <small>and {items.length - 5} more…</small>}
       </div>
       {!allMapped && <p className="import-blocker">Match every unsupported category to continue.</p>}
@@ -860,6 +918,7 @@ function RitualScreen({ step, onStep, month, plan, reflection, budget, expenses,
   step: number; onStep: (n: number) => void; month: string; plan?: MonthPlan; reflection?: { chips: string[]; note: string }; budget: ReturnType<typeof calculateBudget>; expenses: Expense[]; settings: AppSettings
   onPlanSaved: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onReflected: (chips: string[], note: string) => Promise<void>
 }) {
+  const money = useMoneyFormatter()
   const steps = ['Start', 'Track', 'End', 'Reflect']
   const [income, setIncome] = useState(String(plan?.income ?? ''))
   const [fixed, setFixed] = useState(String(plan?.fixed ?? ''))
@@ -878,9 +937,9 @@ function RitualScreen({ step, onStep, month, plan, reflection, budget, expenses,
     setNote(reflection?.note ?? '')
   }, [reflection])
   const next = () => onStep(Math.min(3, step + 1))
-  return <div className="ritual-layout"><div className="ritual-stepper">{steps.map((label, index) => <button key={label} onClick={() => onStep(index)} className={step === index ? 'current' : index < step ? 'complete' : ''}><i>{index < step ? <Check size={14} /> : index + 1}</i><span>{label}</span></button>)}</div><section className="ritual-page panel"><span className="overline">{getMonthTitle(month).toUpperCase()} · STEP {step + 1} OF 4</span>{step === 0 && <><h2>Begin with what you have.</h2><p>What is coming in, and what is already spoken for?</p><label className="form-field">Monthly income<input type="number" min="0" value={income} onChange={(e) => setIncome(e.target.value)} placeholder="0" /></label><label className="form-field">Fixed costs<input type="number" min="0" value={fixed} onChange={(e) => setFixed(e.target.value)} placeholder="0" /></label><label className="form-field">Spent earlier this month <small>Optional · before Kakeibo</small><input type="number" min="0" value={startingSpent} onChange={(e) => setStartingSpent(e.target.value)} placeholder="0" /></label><label className="form-field">Savings target <small>Optional</small><input type="number" min="0" value={savings} onChange={(e) => setSavings(e.target.value)} placeholder="Skip if you like" /></label><div className="spendable-preview"><span>Spendable left now</span><b>{currencyAmount((Number(income) || 0) - (Number(fixed) || 0) - (Number(savings) || 0) - (Number(startingSpent) || 0), settings.currency)}</b></div><button className="button-primary" onClick={() => void onPlanSaved({ income: Number(income) || 0, fixed: Number(fixed) || 0, startingSpent: Number(startingSpent) || 0, savingsTarget: savings ? Number(savings) : null }).then(next)}>Save & continue <ChevronRight size={16} /></button></>}
-      {step === 1 && <><h2>Notice your choices as they happen.</h2><p>A quick pause is enough. No need to be perfect.</p><div className="track-summary"><div><b>{expenses.length}</b><span>choices made</span></div><div><b>{currencyAmount(budget.spent, settings.currency)}</b><span>spent with care</span></div></div><div className="ritual-tip"><Heart size={19} /><span>Every expense has a one-tap pause: Needed it, Wanted it, or Regret.</span></div><button className="button-primary" onClick={next}>Continue <ChevronRight size={16} /></button></>}
-      {step === 2 && <><h2>Look back without judgement.</h2><p>Your month so far, in a few numbers.</p><div className="end-totals">{[['Came in', budget.income], ['Set aside', budget.savings], ['Spent', budget.spent], ['Spendable left', budget.spendableLeft]].map(([label, amount]) => <div key={String(label)}><span>{label}</span><b>{currencyAmount(Number(amount), settings.currency)}</b></div>)}</div><button className="button-primary" onClick={next}>Take a moment <ChevronRight size={16} /></button></>}
+  return <div className="ritual-layout"><div className="ritual-stepper">{steps.map((label, index) => <button key={label} onClick={() => onStep(index)} className={step === index ? 'current' : index < step ? 'complete' : ''}><i>{index < step ? <Check size={14} /> : index + 1}</i><span>{label}</span></button>)}</div><section className="ritual-page panel"><span className="overline">{getMonthTitle(month).toUpperCase()} · STEP {step + 1} OF 4</span>{step === 0 && <><h2>Begin with what you have.</h2><p>What is coming in, and what is already spoken for?</p><label className="form-field">Monthly income<input type="number" min="0" value={income} onChange={(e) => setIncome(e.target.value)} placeholder="0" /></label><label className="form-field">Fixed costs<input type="number" min="0" value={fixed} onChange={(e) => setFixed(e.target.value)} placeholder="0" /></label><label className="form-field">Spent earlier this month <small>Optional · before Kakeibo</small><input type="number" min="0" value={startingSpent} onChange={(e) => setStartingSpent(e.target.value)} placeholder="0" /></label><label className="form-field">Savings target <small>Optional</small><input type="number" min="0" value={savings} onChange={(e) => setSavings(e.target.value)} placeholder="Skip if you like" /></label><div className="spendable-preview"><span>Spendable left now</span><b>{money((Number(income) || 0) - (Number(fixed) || 0) - (Number(savings) || 0) - (Number(startingSpent) || 0), settings.currency)}</b></div><button className="button-primary" onClick={() => void onPlanSaved({ income: Number(income) || 0, fixed: Number(fixed) || 0, startingSpent: Number(startingSpent) || 0, savingsTarget: savings ? Number(savings) : null }).then(next)}>Save & continue <ChevronRight size={16} /></button></>}
+      {step === 1 && <><h2>Notice your choices as they happen.</h2><p>A quick pause is enough. No need to be perfect.</p><div className="track-summary"><div><b>{expenses.length}</b><span>choices made</span></div><div><b>{money(budget.spent, settings.currency)}</b><span>spent with care</span></div></div><div className="ritual-tip"><Heart size={19} /><span>Every expense has a one-tap pause: Needed it, Wanted it, or Regret.</span></div><button className="button-primary" onClick={next}>Continue <ChevronRight size={16} /></button></>}
+      {step === 2 && <><h2>Look back without judgement.</h2><p>Your month so far, in a few numbers.</p><div className="end-totals">{[['Came in', budget.income], ['Set aside', budget.savings], ['Spent', budget.spent], ['Spendable left', budget.spendableLeft]].map(([label, amount]) => <div key={String(label)}><span>{label}</span><b>{money(Number(amount), settings.currency)}</b></div>)}</div><button className="button-primary" onClick={next}>Take a moment <ChevronRight size={16} /></button></>}
       {step === 3 && <><h2>What would you like to carry forward?</h2><p>Pick one or more, or simply leave a note for yourself.</p><div className="reflect-chips">{REFLECT_CHIPS.map((chip) => <button key={chip} className={chips.includes(chip) ? 'selected' : ''} onClick={() => setChips((current) => current.includes(chip) ? current.filter((value) => value !== chip) : [...current, chip])}>{chips.includes(chip) && <Check size={14} />}{chip}</button>)}</div><label className="form-field">A note to future you <small>Optional</small><textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Keep it kind and simple…" /></label><button className="button-primary" onClick={() => void onReflected(chips, note)}>Save reflection <Check size={16} /></button></>}
     </section></div>
 }
@@ -943,13 +1002,14 @@ function RestoreBackupDialog({ onClose, onImport }: {
   </div>
 }
 
-function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onExport, onImport, onAudit, onSync, onAbout, onFactoryReset, onAddWidget }: {
+function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onExport, onImport, onAudit, onSync, onAbout, onFactoryReset, onAddWidget, onLockStateChange }: {
   settings: AppSettings; plan?: MonthPlan; onSave: (patch: Partial<AppSettings>) => Promise<void>; onPlanSave: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onDemoChange: (enabled: boolean) => void; onExport: () => void; onImport: (source: File | string) => Promise<boolean>; onAudit: () => void; onSync: () => void
   onAbout: () => void
   onFactoryReset: () => Promise<void>
   onAddWidget?: () => void
+  onLockStateChange: (locked: boolean) => void
 }) {
-  const [settingsOpen, setSettingsOpen] = useState<Record<string, boolean>>({ month: true, categories: false, feel: true, widget: true, reminders: false, data: false, about: false, demo: false })
+  const [settingsOpen, setSettingsOpen] = useState<Record<string, boolean>>({ month: true, categories: false, feel: true, privacy: true, widget: true, reminders: false, data: false, about: false, demo: false })
   const calendarPreference = useCalendarPreference()
   const toggle = (key: string) => setSettingsOpen((s) => ({ ...s, [key]: !s[key] }))
   const [categories, setCategories] = useState(settings.categories)
@@ -1012,6 +1072,13 @@ function SettingsScreen({ settings, plan, onSave, onPlanSave, onDemoChange, onEx
     </section>
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('categories')}><span className="settings-icon"><MoreHorizontal size={18} /></span><div><h2>Your categories</h2><small>Four gentle buckets. Make them yours.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.categories ? 'open' : ''}`} /></header>{settingsOpen.categories && <><div className="settings-categories">{categories.map((category) => <div className={`settings-category ${category.archived ? 'archived' : ''}`} key={category.id}>{editingId === category.id ? <><input autoFocus value={categoryName} onChange={(e) => setCategoryName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, name: categoryName.trim() || c.name } : c)); setEditingId(undefined) } }} /><button onClick={() => { void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, name: categoryName.trim() || c.name } : c)); setEditingId(undefined) }}><Check size={15} /></button></> : <><CategoryIcon category={category} /><b>{category.name}</b><Select ariaLabel={`Icon for ${category.name}`} value={category.icon} onChange={(value) => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, icon: value } : c))} options={Object.keys(CATEGORY_ICONS).map((icon) => ({ value: icon, label: icon }))} /><input aria-label={`${category.name} color`} type="color" value={category.color} onChange={(e) => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, color: e.target.value } : c))} /><button title="Rename" onClick={() => beginEdit(category)}><Pencil size={14} /></button><button title={category.archived ? 'Unarchive' : 'Archive'} onClick={() => void saveCategoryList(categories.map((c) => c.id === category.id ? { ...c, archived: !c.archived } : c))}>{category.archived ? <ArrowUpFromLine size={15} /> : <Trash2 size={14} />}</button></>}</div>)}</div><button className="text-button add-category" onClick={() => void addCategory()}><Plus size={16} /> Add category</button></>}</section>
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('feel')}><span className="settings-icon"><Sun size={18} /></span><div><h2>Appearance</h2><small>Quiet, comfortable, and yours.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.feel ? 'open' : ''}`} /></header>{settingsOpen.feel && <><div className="settings-row"><span>Theme</span><Select value={settings.theme} onChange={(v) => void onSave({ theme: v as AppSettings['theme'] })} options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'auto', label: 'Match device' }]} /></div><div className="settings-row"><span>Calendar</span><Select ariaLabel="Calendar system" value={calendarPreference.system} onChange={(v) => setCalendarPreference({ system: v as CalendarSystem })} options={[{ value: 'gregorian', label: 'Gregorian' }, { value: 'ethiopian', label: 'Ethiopian' }]} /></div>{calendarPreference.system === 'ethiopian' && <div className="settings-row"><span>Ethiopian day names</span><Select ariaLabel="Ethiopian day names" value={calendarPreference.language} onChange={(v) => setCalendarPreference({ language: v as CalendarLanguage })} options={[{ value: 'en', label: 'English' }, { value: 'am', label: 'አማርኛ' }]} /></div>}</>}</section>
+    <AppPrivacySettings
+      settings={settings}
+      open={Boolean(settingsOpen.privacy)}
+      onToggleOpen={() => toggle('privacy')}
+      onSave={onSave}
+      onLockStateChange={onLockStateChange}
+    />
     {onAddWidget && <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('widget')}><span className="settings-icon"><Plus size={18} /></span><div><h2>Home screen widget</h2><small>See what is left without opening Kakeibo.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.widget ? 'open' : ''}`} /></header>{settingsOpen.widget && <div className="settings-row"><span>Add the spendable-left widget to your home screen</span><button className="button-quiet" onClick={onAddWidget}><Plus size={16} /> Add widget</button></div>}</section>}
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('reminders')}><span className="settings-icon"><Clock3 size={18} /></span><div><h2>Reminders</h2><small>Gentle nudges to register your spending.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.reminders ? 'open' : ''}`} /></header>{settingsOpen.reminders && <><div className="settings-row"><span>Enable reminders</span><Toggle checked={remindersEnabled} onChange={(v) => { setRemindersEnabled(v); void onSave({ remindersEnabled: v }) }} /></div><div className="settings-row"><span>Midday reminder</span><TimePicker value={reminderMiddayTime} onChange={(v) => { setReminderMiddayTime(v); void onSave({ reminderMiddayTime: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Night reminder</span><TimePicker value={reminderNightTime} onChange={(v) => { setReminderNightTime(v); void onSave({ reminderNightTime: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Weekly report</span><Toggle checked={reminderWeeklyEnabled} onChange={(v) => { setReminderWeeklyEnabled(v); void onSave({ reminderWeeklyEnabled: v }) }} disabled={!remindersEnabled} /></div><div className="settings-row"><span>Weekly report day</span><Select value={reminderWeeklyDay} onChange={(v) => { setReminderWeeklyDay(v); void onSave({ reminderWeeklyDay: Number(v) }) }} disabled={!remindersEnabled || !reminderWeeklyEnabled} options={[{ value: '0', label: 'Sunday' }, { value: '1', label: 'Monday' }, { value: '2', label: 'Tuesday' }, { value: '3', label: 'Wednesday' }, { value: '4', label: 'Thursday' }, { value: '5', label: 'Friday' }, { value: '6', label: 'Saturday' }]} /></div></>}</section>
     <section className="panel settings-group"><header className="settings-header-clickable" onClick={() => toggle('data')}><span className="settings-icon"><ArrowDownToLine size={18} /></span><div><h2>Your data</h2><small>Keep a copy or move it with you.</small></div><ChevronRight size={18} className={`chev ${settingsOpen.data ? 'open' : ''}`} /></header>{settingsOpen.data && <><div className="data-actions"><button className="button-quiet" onClick={onExport}><Download size={16} /> Backup data</button><button className="button-quiet" type="button" onClick={() => setRestoreOpen(true)}><ArrowUpFromLine size={16} /> Restore backup</button><button className="button-quiet" onClick={onSync}><RefreshCw size={16} /> Sync devices</button><button className="button-quiet" onClick={onAudit}><Clock3 size={16} /> View audit log</button></div>{restoreOpen && <RestoreBackupDialog onClose={() => setRestoreOpen(false)} onImport={onImport} />}<div className="factory-reset-row"><span><b>Factory reset</b><small>Erase everything on this device and start fresh.</small></span><button className="button-danger-quiet" onClick={() => void onFactoryReset()}><Trash2 size={15} /> Factory reset</button></div></>}</section>
@@ -1059,7 +1126,7 @@ async function exportPdf(expenses: Expense[], currency: string, month: string, n
     pdf.text('SPENT THIS MONTH', 18, 49)
     pdf.setFontSize(21)
     pdf.setTextColor(52, 61, 53)
-    pdf.text(currencyAmount(total, currency), 18, 60)
+    pdf.text(plainAmountText(total, currency), 18, 60)
     pdf.setFontSize(10)
     pdf.setTextColor(115, 124, 115)
     pdf.text(`${expenses.length} mindful ${expenses.length === 1 ? 'choice' : 'choices'}`, 18, 68)
@@ -1068,7 +1135,7 @@ async function exportPdf(expenses: Expense[], currency: string, month: string, n
     for (const [label, amount] of [['Income', plan?.income], ['Fixed costs', plan?.fixed], ['Savings target', plan?.savingsTarget], ['Spendable', (plan?.income ?? 0) - (plan?.fixed ?? 0) - (plan?.savingsTarget ?? 0)]] as const) {
       pdf.setFontSize(9)
       pdf.text(label, 18, y)
-      pdf.text(amount == null ? 'Not set' : currencyAmount(amount, currency), 190, y, { align: 'right' })
+      pdf.text(amount == null ? 'Not set' : plainAmountText(amount, currency), 190, y, { align: 'right' })
       y += 7
     }
     y += 4
@@ -1079,7 +1146,7 @@ async function exportPdf(expenses: Expense[], currency: string, month: string, n
     for (const [category, amount] of totals) {
       pdf.setFontSize(10)
       pdf.text(category, 18, y)
-      pdf.text(currencyAmount(amount, currency), 190, y, { align: 'right' })
+      pdf.text(plainAmountText(amount, currency), 190, y, { align: 'right' })
       y += 9
     }
     y += 7
@@ -1094,7 +1161,7 @@ async function exportPdf(expenses: Expense[], currency: string, month: string, n
       pdf.setFontSize(9)
       pdf.setTextColor(52, 61, 53)
       pdf.text(`${expense.date.slice(0, 10)}  ·  ${expense.note || expense.category}${expense.pause ? `  ·  ${expense.pause}` : ''}`, 18, y, { maxWidth: 130 })
-      pdf.text(currencyAmount(expense.amount, currency), 190, y, { align: 'right' })
+      pdf.text(plainAmountText(expense.amount, currency), 190, y, { align: 'right' })
       y += 8
     }
     const bytes = new Uint8Array(pdf.output('arraybuffer'))

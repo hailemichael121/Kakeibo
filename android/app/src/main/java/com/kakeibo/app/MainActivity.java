@@ -7,6 +7,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(KakeiboWidgetPlugin.class);
+        registerPlugin(KakeiboLockPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
