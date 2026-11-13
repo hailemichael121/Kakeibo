@@ -1,7 +1,33 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Capacitor } from '@capacitor/core'
 import { Camera, ChevronLeft, X } from 'lucide-react'
 import { decodeQrPixels, scanQrPhoto } from '@/services/qrScan'
+
+async function requestCameraPermission() {
+  if (!Capacitor.isNativePlatform()) return
+  const { Camera } = await import('@capacitor/camera')
+  try {
+    const status = await Camera.checkPermissions()
+    if (status.camera === 'granted') return
+    if (status.camera === 'denied') {
+      throw new Error('Camera access is blocked. Open Settings > Apps > Kakeibo > Permissions > Camera and allow it.')
+    }
+    const requested = await Camera.requestPermissions({ permissions: ['camera'] })
+    if (requested.camera !== 'granted') {
+      throw new Error('Camera access is needed to scan the QR code. Allow camera permission and try again.')
+    }
+  } catch (reason) {
+    if (reason instanceof Error && /blocked|needed/i.test(reason.message)) throw reason
+  }
+}
+
+function cameraErrorMessage(reason: unknown) {
+  if (reason instanceof DOMException && reason.name === 'NotAllowedError') {
+    return 'Camera access was blocked. Allow camera permission for Kakeibo and try again.'
+  }
+  return reason instanceof Error ? reason.message : 'Camera access was unavailable.'
+}
 
 export function QrScanner({ onResult, onClose }: { onResult: (value: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -46,6 +72,7 @@ export function QrScanner({ onResult, onClose }: { onResult: (value: string) => 
     void (async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('Live camera scanning is unavailable.')
+        await requestCameraPermission()
         stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -63,7 +90,7 @@ export function QrScanner({ onResult, onClose }: { onResult: (value: string) => 
       } catch (reason) {
         if (stopped) return
         setStarting(false)
-        setError(reason instanceof Error ? reason.message : 'Camera access was unavailable.')
+        setError(cameraErrorMessage(reason))
       }
     })()
 
@@ -89,13 +116,21 @@ export function QrScanner({ onResult, onClose }: { onResult: (value: string) => 
 
   return createPortal(
     <div className="sync-scan-overlay" role="dialog" aria-modal="true" aria-label="Scan sync QR code">
-      <button className="icon-button" aria-label="Close scanner" onClick={onClose}><X size={20} /></button>
-      <video ref={videoRef} autoPlay playsInline muted aria-label="Live QR scanner" />
-      <p>{starting && !error ? 'Starting the camera…' : 'Point your camera at the QR code shown on your computer.'}</p>
-      {error && <p className="sync-scan-error" role="alert">{error}</p>}
-      <div className="sync-scan-controls">
-        <button className="button-quiet" disabled={photoBusy} onClick={() => void scanCameraPhoto()}><Camera size={16} />{photoBusy ? 'Reading photo…' : 'Use a camera photo instead'}</button>
-        <button className="button-quiet back-button" onClick={onClose}><span className="back-icon"><ChevronLeft size={16} /></span> Back</button>
+      <header className="sync-scan-head">
+        <div className="sync-scan-heading">
+          <span>Sync devices</span>
+          <h2>Scan QR code</h2>
+        </div>
+        <button className="sync-scan-close" aria-label="Close scanner" onClick={onClose}><X size={20} /></button>
+      </header>
+      <div className="sync-scan-content">
+        <video ref={videoRef} autoPlay playsInline muted aria-label="Live QR scanner" />
+        <p>{starting && !error ? 'Starting the camera…' : 'Point your camera at the QR code shown on your computer.'}</p>
+        {error && <p className="sync-scan-error" role="alert">{error}</p>}
+        <div className="sync-scan-controls">
+          <button className="button-quiet" disabled={photoBusy} onClick={() => void scanCameraPhoto()}><Camera size={16} />{photoBusy ? 'Reading photo…' : 'Use a camera photo instead'}</button>
+          <button className="button-quiet back-button" onClick={onClose}><span className="back-icon"><ChevronLeft size={16} /></span> Back</button>
+        </div>
       </div>
     </div>,
     document.body,

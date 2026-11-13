@@ -84,9 +84,8 @@ def render_mark(logo: Image.Image, size: int, *, logo_ratio: float = 0.52, plate
     plate = Image.alpha_composite(plate, plate_outline)
 
     shadow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    shadow_plate = plate.copy()
     offset = max(1, round(size * 0.018))
-    shadow.alpha_composite(shadow_plate, (0, offset))
+    shadow.alpha_composite(plate, ((size - plate_size) // 2, (size - plate_size) // 2 + offset))
     shadow = shadow.filter(ImageFilter.GaussianBlur(radius=max(1, size * 0.028)))
     shadow = ImageChops.multiply(shadow, Image.new("RGBA", shadow.size, SHADOW))
 
