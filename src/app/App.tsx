@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { db, amountText, defaultSettings, monthKey, uid, type AppSettings, type AuditEntry, type Category, type Expense, type MonthPlan } from '@/db/db'
 import { ensureSettings, deleteExpense, recordAudit, resetAllData, restoreExpense, saveExpense, savePlan, saveReflection, saveSettings, type SaveExpenseInput } from '@/db/repo'
+import { recoverSafetyMirror, writeSafetyMirror } from '@/db/safety'
 import { calculateBudget, categoryPercent } from '@/domain/budget'
 import { getBudgetCalendarDates, localDateKey, summarizeExpensesByLocalDay } from '@/domain/calendar'
 import { parseAmount } from '@/domain/amount'
@@ -41,6 +42,7 @@ const NAV: { name: Exclude<Screen, 'Sync' | 'About'>; icon: typeof Home }[] = [
   { name: 'Settings', icon: SettingsIcon },
 ]
 const CATEGORY_ICONS: Record<string, typeof House> = { House, ShoppingBag, BookOpen, Umbrella, Coffee, Heart, Wallet }
+const guideImage = (file: string) => `${import.meta.env.BASE_URL}kakeibo-guide/${file}`
 const PAUSE_TAGS = ['Needed it', 'Wanted it', 'Regret'] as const
 const REFLECT_CHIPS = ['Plan ahead', 'Pause before buying', 'Celebrate progress', 'Spend on what matters']
 
@@ -87,6 +89,7 @@ export function App() {
   const [widgetNudgeVisible, setWidgetNudgeVisible] = useState(() => canAddHomeWidget() && window.localStorage.getItem('kakeibo.widgetNudgeSeen') !== '1')
 
   const refresh = useCallback(async (options?: { realignMonth?: boolean }) => {
+    await recoverSafetyMirror()
     const nextSettings = await ensureSettings()
     const currentMonth = monthKey(new Date(), nextSettings.monthStartDay)
     let viewMonth = month
@@ -562,7 +565,7 @@ function KakeiboGuide({ categories, compact = false }: { categories: Category[];
           <p>Kakeibo brings planning, everyday tracking, and a quiet monthly review together. The aim is not perfect spending; it is learning what feels worthwhile and making small, considered adjustments.</p>
         </header>
         <figure className="kakeibo-article-figure kakeibo-article-cover">
-          <img src="/kakeibo-guide/kakeibo-budgeting.webp" alt="A person writes down household expenses in a notebook." decoding="async" />
+          <img src={guideImage('kakeibo-budgeting.webp')} alt="A person writes down household expenses in a notebook." decoding="async" />
           <figcaption>A little time with your numbers can make everyday choices easier to see.</figcaption>
         </figure>
         <section className="kakeibo-article-section">
@@ -580,7 +583,7 @@ function KakeiboGuide({ categories, compact = false }: { categories: Category[];
           </div>
         </section>
         <figure className="kakeibo-article-figure">
-          <img src="/kakeibo-guide/kakeibo-budgeting-3.webp" alt="Illustration of a repeating six-step Kakeibo practice, from tracking through reflection." decoding="async" />
+          <img src={guideImage('kakeibo-budgeting-3.webp')} alt="Illustration of a repeating six-step Kakeibo practice, from tracking through reflection." decoding="async" />
           <figcaption>The cycle is flexible: repeat it, learn, and adjust it to your life.</figcaption>
         </figure>
         <section className="kakeibo-article-section">
@@ -594,7 +597,7 @@ function KakeiboGuide({ categories, compact = false }: { categories: Category[];
           <p>These are prompts, not rules. A category is a tool for understanding a purchase, never a score or a judgement.</p>
         </section>
         <figure className="kakeibo-article-figure">
-          <img src="/kakeibo-guide/kakeibo-budgeting-1.webp" alt="Diagram showing behavior change as a cycle of learning and returning to action." decoding="async" />
+          <img src={guideImage('kakeibo-budgeting-1.webp')} alt="Diagram showing behavior change as a cycle of learning and returning to action." decoding="async" />
           <figcaption>Change can move in small steps, with learning along the way.</figcaption>
         </figure>
         <section className="kakeibo-article-section kakeibo-article-two-col">
@@ -608,7 +611,7 @@ function KakeiboGuide({ categories, compact = false }: { categories: Category[];
           </div>
         </section>
         <figure className="kakeibo-article-figure">
-          <img src="/kakeibo-guide/kakeibo-budgeting-2.webp" alt="Illustration of a calm journal, a simple routine, and goal-setting." decoding="async" />
+          <img src={guideImage('kakeibo-budgeting-2.webp')} alt="Illustration of a calm journal, a simple routine, and goal-setting." decoding="async" />
           <figcaption>Make the routine fit the way you already live.</figcaption>
         </figure>
         <section className="kakeibo-article-section">
@@ -1348,6 +1351,7 @@ async function importBackup(source: File | string, refresh: (options?: { realign
         if (rows?.length) await db.table(name).bulkPut(rows as never[])
       }
     })
+    await writeSafetyMirror()
     await refresh({ realignMonth: true })
     notify(restoreSource === 'expense-json' ? 'Expenses restored' : 'Backup restored')
     return true

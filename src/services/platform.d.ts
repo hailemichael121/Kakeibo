@@ -18,6 +18,9 @@ declare global {
   interface Window {
     kakeibo?: {
       saveFile: (options: { name: string; data: Uint8Array; mime?: string }) => Promise<{ saved: boolean; path?: string; canceled?: boolean }>
+      readSafetyBackup?: () => Promise<string | null>
+      writeSafetyBackup?: (data: string) => Promise<boolean>
+      clearSafetyBackup?: () => Promise<boolean>
       lanStart?: (options: { mode: 'send' | 'receive'; name?: string; data?: Uint8Array }) => Promise<KakeiboLanSession | null>
       lanStop?: () => Promise<void>
       onLanReceived?: (handler: (file: { name: string; data: Uint8Array }) => void) => () => void

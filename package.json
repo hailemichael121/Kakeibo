@@ -1,7 +1,7 @@
 {
   "name": "kakeibo",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Mindful offline-first personal budgeting",
   "author": "Kakeibo",
   "homepage": "https://github.com/hailemichael121/Kakeibo",
@@ -48,6 +48,7 @@
     "brand:assets": "python3 scripts/generate-brand-assets.py"
   },
   "dependencies": {
+    "@capacitor-community/sqlite": "^6.0.2",
     "@capacitor/android": "^6.2.0",
     "@capacitor/camera": "^6.1.2",
     "@capacitor/core": "^6.2.0",

@@ -7,4 +7,6 @@ import '@fontsource/plus-jakarta-sans/700.css'
 import '@/styles/app.css'
 import { App } from '@/app/App'
 
+if (navigator.storage?.persist) void navigator.storage.persist().catch(() => {})
+
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)

@@ -120,6 +120,34 @@ test.describe('Kakeibo app', () => {
     await expect(page.locator('.recent-panel .expense-row').first()).toContainText('Office → Bole')
   })
 
+  test('saved expenses survive a hard reload', async ({ page }) => {
+    await completeOnboarding(page)
+    await addExpense(page, '77')
+    await expect(page.locator('.recent-panel .expense-row').first()).toContainText('Optional')
+
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Page.reload', { ignoreCache: true })
+    await waitForApp(page)
+    await expect(page.locator('.recent-panel .expense-row').first()).toContainText('Optional')
+  })
+
+  test('data and onboarding return if IndexedDB is cleared', async ({ page, context }) => {
+    await completeOnboarding(page)
+    await addExpense(page, '77')
+    await expect(page.locator('.recent-panel .expense-row').first()).toContainText('Optional')
+
+    const cdp = await context.newCDPSession(page)
+    await cdp.send('Storage.clearDataForOrigin', {
+      origin: new URL(page.url()).origin,
+      storageTypes: 'indexeddb',
+    })
+    await page.reload()
+    await waitForApp(page)
+
+    await expect(page.locator('.onboarding-card')).toHaveCount(0)
+    await expect(page.locator('.recent-panel .expense-row').first()).toContainText('Optional')
+  })
+
   test('typing in optional details does not feed the amount keypad', async ({ page }) => {
     await completeOnboarding(page)
     await page.locator('.sidebar-add').click()

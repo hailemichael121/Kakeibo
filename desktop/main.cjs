@@ -14,6 +14,7 @@ if (process.platform === 'linux' && process.env.WAYLAND_DISPLAY && process.env.D
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
 const stateFile = () => path.join(app.getPath('userData'), 'desktop-state.json')
+const safetyFile = () => path.join(app.getPath('userData'), 'kakeibo-safety-backup.json')
 
 function readState() {
   try {
@@ -69,6 +70,14 @@ function createWindow() {
     mainWindow = null
   })
 
+  // The packaged app should not behave like a browser tab. Block the reload
+  // accelerators so Ctrl/Cmd+R and F5 cannot discard the running UI.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    const key = String(input.key || '').toLowerCase()
+    const reloadAccelerator = (input.control || input.meta) && key === 'r'
+    if (reloadAccelerator || key === 'f5') event.preventDefault()
+  })
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
@@ -93,7 +102,17 @@ function buildMenu() {
       ],
     },
     { role: 'editMenu' },
-    { role: 'viewMenu' },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+        ...(isDev ? [{ type: 'separator' }, { role: 'toggleDevTools' }] : []),
+      ],
+    },
     { role: 'windowMenu' },
     {
       role: 'help',
@@ -264,6 +283,38 @@ ipcMain.handle('kakeibo:saveFile', async (_event, { name, data, mime }) => {
     console.error('saveFile failed', error)
     return { saved: false }
   }
+})
+
+ipcMain.handle('kakeibo:readSafetyBackup', async () => {
+  try {
+    return fs.readFileSync(safetyFile(), 'utf8')
+  } catch {
+    return null
+  }
+})
+
+ipcMain.handle('kakeibo:writeSafetyBackup', async (_event, data) => {
+  if (typeof data !== 'string' || data.length > 25 * 1024 * 1024) return false
+  try {
+    const file = safetyFile()
+    const temp = `${file}.tmp`
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(temp, data, 'utf8')
+    fs.renameSync(temp, file)
+    return true
+  } catch (error) {
+    console.error('writeSafetyBackup failed', error)
+    return false
+  }
+})
+
+ipcMain.handle('kakeibo:clearSafetyBackup', async () => {
+  try {
+    fs.unlinkSync(safetyFile())
+  } catch {
+    // Already absent.
+  }
+  return true
 })
 
 ipcMain.handle('kakeibo:lanStart', (_event, payload) => lan.start(payload))

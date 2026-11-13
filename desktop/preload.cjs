@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('kakeibo', {
   saveFile: (options) => ipcRenderer.invoke('kakeibo:saveFile', options),
+  readSafetyBackup: () => ipcRenderer.invoke('kakeibo:readSafetyBackup'),
+  writeSafetyBackup: (data) => ipcRenderer.invoke('kakeibo:writeSafetyBackup', data),
+  clearSafetyBackup: () => ipcRenderer.invoke('kakeibo:clearSafetyBackup'),
   lanStart: (options) => ipcRenderer.invoke('kakeibo:lanStart', options),
   lanStop: () => ipcRenderer.invoke('kakeibo:lanStop'),
   onLanReceived: (handler) => {

@@ -1,4 +1,5 @@
 import { db, defaultSettings, uid, type AppSettings, type AuditEntry, type Expense, type JournalEntry, type JournalHighlight, type MonthPlan, type MonthReflection } from './db'
+import { clearSafetyMirror, writeSafetyMirror } from './safety'
 
 export async function ensureSettings(): Promise<AppSettings> {
   const found = await db.settings.get('app')
@@ -21,6 +22,7 @@ export async function ensureSettings(): Promise<AppSettings> {
 
 export async function recordAudit(entry: Omit<AuditEntry, 'id' | 'timestamp'>): Promise<void> {
   await db.audit.add({ ...entry, id: uid(), timestamp: new Date().toISOString() })
+  await writeSafetyMirror()
 }
 
 export type SaveExpenseInput = Pick<Expense, 'amount' | 'category' | 'date'> & Partial<Pick<Expense, 'pause' | 'note' | 'from' | 'to' | 'peopleCount'>> & { demo?: boolean }
@@ -169,5 +171,6 @@ export async function resetAllData(): Promise<AppSettings> {
   })
   const settings = defaultSettings()
   await db.settings.put(settings)
+  await clearSafetyMirror()
   return settings
 }

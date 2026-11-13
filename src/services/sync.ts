@@ -1,4 +1,5 @@
 import { db, uid, type AppSettings, type AuditEntry, type Category, type Expense, type JournalEntry, type MonthPlan, type MonthReflection, type SyncData } from '@/db/db'
+import { writeSafetyMirror } from '@/db/safety'
 
 const FORMAT = 'kakeibo-sync'
 const VERSION = 1
@@ -254,7 +255,7 @@ function ordered(data: SyncData): SyncData {
 }
 
 export async function applySync(payload: SyncPackage, fileName: string): Promise<{ preview: SyncPreview; snapshotId: string }> {
-  return db.transaction('rw', [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit, db.syncSnapshots], async () => {
+  const result = await db.transaction('rw', [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit, db.syncSnapshots], async () => {
     const before = await readSyncData()
     const preview = previewSync(before, payload.data)
     await writeNewer(db.expenses, payload.data.expenses)
@@ -280,10 +281,12 @@ export async function applySync(payload: SyncPackage, fileName: string): Promise
     await db.syncSnapshots.add({ id: snapshotId, at: new Date().toISOString(), fileName, before: ordered(before), after: ordered(after) })
     return { preview, snapshotId }
   })
+  await writeSafetyMirror()
+  return result
 }
 
 export async function undoSync(snapshotId: string): Promise<boolean> {
-  return db.transaction('rw', [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit, db.syncSnapshots], async () => {
+  const result = await db.transaction('rw', [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit, db.syncSnapshots], async () => {
     const snapshot = await db.syncSnapshots.get(snapshotId)
     if (!snapshot) return false
     const current = ordered(await readSyncData())
@@ -312,4 +315,6 @@ export async function undoSync(snapshotId: string): Promise<boolean> {
     })
     return true
   })
+  if (result) await writeSafetyMirror()
+  return result
 }
