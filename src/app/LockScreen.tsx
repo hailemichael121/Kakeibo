@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Fingerprint } from 'lucide-react'
-import { biometricLockStatus, pinIsValid, unlockWithBiometric, verifyAppPin } from '@/lib/lock'
+import { biometricUnlockReady, pinIsValid, unlockWithBiometric, verifyAppPin } from '@/lib/lock'
 import type { AppSettings } from '@/db/db'
 
 type LockScreenProps = {
@@ -17,18 +17,17 @@ export function LockScreen({ settings, onUnlocked }: LockScreenProps) {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      if (!settings.lockUseBiometric) return
-      const status = await biometricLockStatus()
-      if (!cancelled) setBiometricReady(status.available && status.enrolled)
+      const ready = await biometricUnlockReady(settings)
+      if (!cancelled) setBiometricReady(ready)
     })()
     return () => { cancelled = true }
-  }, [settings.lockUseBiometric])
+  }, [settings])
 
   const tryBiometric = useCallback(async () => {
     if (busy) return
     setBusy(true)
     setError('')
-    const ok = await unlockWithBiometric()
+    const ok = await unlockWithBiometric(settings)
     setBusy(false)
     if (ok) onUnlocked()
     else setError('Could not confirm your fingerprint. Use your PIN instead.')
@@ -73,7 +72,7 @@ export function LockScreen({ settings, onUnlocked }: LockScreenProps) {
       <section className="lock-card panel">
         <img className="lock-logo" src="./kakeibo.png" alt="" />
         <h1>Kakeibo is locked</h1>
-        <p>Enter your PIN{biometricReady ? ' or use fingerprint' : ''} to continue.</p>
+        <p>Enter your PIN{biometricReady ? ' or use fingerprint or face' : ''} to continue.</p>
         <div className="lock-dots" aria-hidden="true">
           {Array.from({ length: 4 }, (_, index) => <i key={index} className={index < pin.length ? 'filled' : ''} />)}
         </div>

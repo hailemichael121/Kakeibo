@@ -1,7 +1,7 @@
 export async function shareBytes(filename: string, bytes: Uint8Array, mime: string): Promise<void> {
-  const bridge = window.kakeibo
-  if (bridge) {
-    const result = await bridge.saveFile({ name: filename, data: bytes, mime })
+  const saveFile = window.kakeibo?.saveFile
+  if (saveFile) {
+    const result = await saveFile({ name: filename, data: bytes, mime })
     if (result.canceled) return
     if (!result.saved) throw new Error('File could not be saved.')
     return

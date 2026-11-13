@@ -243,6 +243,7 @@ function mergeSettings(local: AppSettings | undefined, incoming: AppSettings): A
     lockPinHash: local.lockPinHash ?? incoming.lockPinHash,
     lockPinSalt: local.lockPinSalt ?? incoming.lockPinSalt,
     lockUseBiometric: local.lockUseBiometric ?? incoming.lockUseBiometric,
+    lockWebAuthnCredentialId: local.lockWebAuthnCredentialId ?? incoming.lockWebAuthnCredentialId,
     updatedAt: new Date(Math.max(timestamp(local), timestamp(incoming))).toISOString(),
   }
 }

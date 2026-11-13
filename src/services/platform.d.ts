@@ -17,6 +17,8 @@ declare global {
 
   interface Window {
     kakeibo?: {
+      isDesktop?: boolean
+      onDesktopResume?: (handler: () => void) => () => void
       saveFile: (options: { name: string; data: Uint8Array; mime?: string }) => Promise<{ saved: boolean; path?: string; canceled?: boolean }>
       readSafetyBackup?: () => Promise<string | null>
       writeSafetyBackup?: (data: string) => Promise<boolean>

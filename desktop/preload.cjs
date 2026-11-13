@@ -1,6 +1,12 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('kakeibo', {
+  isDesktop: true,
+  onDesktopResume: (handler) => {
+    const listener = () => handler()
+    ipcRenderer.on('kakeibo:desktopResume', listener)
+    return () => ipcRenderer.removeListener('kakeibo:desktopResume', listener)
+  },
   saveFile: (options) => ipcRenderer.invoke('kakeibo:saveFile', options),
   readSafetyBackup: () => ipcRenderer.invoke('kakeibo:readSafetyBackup'),
   writeSafetyBackup: (data) => ipcRenderer.invoke('kakeibo:writeSafetyBackup', data),

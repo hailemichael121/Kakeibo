@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createPinHash, pinIsValid, verifyAppPin } from './lock'
+import { createPinHash, deviceLockFields, isLockMigration, needsLockSetup, pinIsValid, verifyAppPin } from './lock'
+import type { AppSettings } from '@/db/db'
 
 describe('app lock PIN', () => {
   it('accepts only four-digit pins', () => {
@@ -35,5 +36,37 @@ describe('app lock PIN', () => {
       lockPinHash: hash,
       lockPinSalt: salt,
     })).toBe(false)
+  })
+})
+
+describe('lock migration detection', () => {
+  const base: AppSettings = {
+    id: 'app',
+    currency: 'ETB',
+    monthStartDay: 1,
+    theme: 'light',
+    language: 'en',
+    categories: [],
+    demoEnabled: false,
+    onboarded: false,
+  }
+
+  it('requires setup when no pin exists', () => {
+    expect(needsLockSetup(base)).toBe(true)
+  })
+
+  it('treats returning users as migration', () => {
+    expect(isLockMigration({ ...base, onboarded: true }, false)).toBe(true)
+    expect(isLockMigration(base, true)).toBe(true)
+    expect(isLockMigration(base, false)).toBe(false)
+  })
+
+  it('extracts device lock fields when a pin exists', () => {
+    expect(deviceLockFields(base)).toEqual({})
+    expect(deviceLockFields({ ...base, lockPinHash: 'h', lockPinSalt: 's' })).toMatchObject({
+      lockPinHash: 'h',
+      lockPinSalt: 's',
+      lockEnabled: true,
+    })
   })
 })

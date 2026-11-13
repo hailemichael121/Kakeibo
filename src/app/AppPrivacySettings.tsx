@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react'
 import { Fingerprint, Lock } from 'lucide-react'
 import type { AppSettings } from '@/db/db'
 import { amountsHiddenByDefault } from '@/lib/privacy'
-import { biometricLockStatus, createPinHash, pinIsValid, verifyAppPin } from '@/lib/lock'
+import {
+  appLockIsActive,
+  biometricUnlockReady,
+  buildLockSetupPatch,
+  deviceSupportsBiometric,
+  pinIsValid,
+  registerWebAuthnLock,
+  verifyAppPin,
+} from '@/lib/lock'
 import { Toggle } from './Toggle'
 
 type AppPrivacySettingsProps = {
@@ -14,69 +22,73 @@ type AppPrivacySettingsProps = {
 }
 
 export function AppPrivacySettings({ settings, open, onToggleOpen, onSave, onLockStateChange }: AppPrivacySettingsProps) {
-  const [setupOpen, setSetupOpen] = useState(false)
+  const [changePinOpen, setChangePinOpen] = useState(false)
+  const [currentPin, setCurrentPin] = useState('')
   const [pin, setPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
-  const [useBiometric, setUseBiometric] = useState(settings.lockUseBiometric !== false)
+  const [useBiometric] = useState(settings.lockUseBiometric !== false)
   const [biometricReady, setBiometricReady] = useState(false)
+  const [deviceBiometric, setDeviceBiometric] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const status = await biometricLockStatus()
-      if (!cancelled) setBiometricReady(status.available && status.enrolled)
+      const [ready, supported] = await Promise.all([biometricUnlockReady(settings), deviceSupportsBiometric()])
+      if (!cancelled) {
+        setBiometricReady(ready)
+        setDeviceBiometric(supported)
+      }
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [settings])
 
-  async function enableLock() {
+  async function changePin() {
     setError('')
+    if (!pinIsValid(currentPin) || !(await verifyAppPin(currentPin, settings))) {
+      setError('Enter your current PIN correctly.')
+      return
+    }
     if (!pinIsValid(pin) || !pinIsValid(confirmPin)) {
-      setError('Choose a four-digit PIN.')
+      setError('Choose a new four-digit PIN.')
       return
     }
     if (pin !== confirmPin) {
-      setError('PIN entries do not match.')
+      setError('New PIN entries do not match.')
       return
     }
     setBusy(true)
     try {
-      const { hash, salt } = await createPinHash(pin)
-      await onSave({
-        lockEnabled: true,
-        lockPinHash: hash,
-        lockPinSalt: salt,
-        lockUseBiometric: biometricReady && useBiometric,
-      })
-      setSetupOpen(false)
+      const patch = await buildLockSetupPatch(pin, useBiometric)
+      await onSave(patch)
+      setChangePinOpen(false)
+      setCurrentPin('')
       setPin('')
       setConfirmPin('')
-      onLockStateChange(true)
     } catch {
-      setError('Could not turn on app lock.')
+      setError('Could not change your PIN.')
     } finally {
       setBusy(false)
     }
   }
 
-  async function disableLock() {
-    if (!settings.lockPinHash) {
-      await onSave({ lockEnabled: false, lockPinHash: undefined, lockPinSalt: undefined, lockUseBiometric: true })
-      onLockStateChange(false)
+  async function toggleBiometric(enabled: boolean) {
+    if (!appLockIsActive(settings)) return
+    if (enabled && !settings.lockWebAuthnCredentialId) {
+      const credentialId = await registerWebAuthnLock()
+      await onSave({
+        lockUseBiometric: Boolean(credentialId),
+        ...(credentialId ? { lockWebAuthnCredentialId: credentialId } : {}),
+      })
       return
     }
-    const currentPin = pin
-    if (!pinIsValid(currentPin) || !(await verifyAppPin(currentPin, settings))) {
-      setError('Enter your current PIN to turn off app lock.')
-      return
-    }
-    await onSave({ lockEnabled: false, lockPinHash: undefined, lockPinSalt: undefined, lockUseBiometric: true })
-    setPin('')
-    setError('')
-    onLockStateChange(false)
+    await onSave({ lockUseBiometric: enabled })
   }
+
+  const lockLabel = biometricReady && settings.lockUseBiometric !== false
+    ? 'PIN + biometrics'
+    : 'PIN (required)'
 
   return (
     <section className="panel settings-group">
@@ -100,28 +112,37 @@ export function AppPrivacySettings({ settings, open, onToggleOpen, onSave, onLoc
           <div className="settings-row privacy-lock-status">
             <span>
               App lock
-              <small>
-                {settings.lockEnabled
-                  ? biometricReady && settings.lockUseBiometric
-                    ? 'PIN + fingerprint'
-                    : 'PIN'
-                  : 'Off'}
-              </small>
+              <small>{lockLabel} · always on</small>
             </span>
-            {settings.lockEnabled ? (
-              <div className="privacy-lock-actions">
-                <button type="button" className="button-quiet" onClick={() => onLockStateChange(true)}>Lock now</button>
-                <button type="button" className="button-danger-quiet" onClick={() => void disableLock()}>Turn off</button>
-              </div>
-            ) : (
-              <button type="button" className="button-quiet" onClick={() => setSetupOpen((value) => !value)}>
-                <Lock size={15} /> Set up app lock
+            <div className="privacy-lock-actions">
+              <button type="button" className="button-quiet" onClick={() => onLockStateChange(true)}>Lock now</button>
+              <button type="button" className="button-quiet" onClick={() => setChangePinOpen((value) => !value)}>
+                Change PIN
               </button>
-            )}
+            </div>
           </div>
-          {setupOpen && !settings.lockEnabled && (
+          {settings.lockWebAuthnCredentialId || deviceBiometric ? (
+            <label className="settings-row lock-bio-toggle">
+              <span><Fingerprint size={16} /> Prefer fingerprint or face</span>
+              <Toggle
+                checked={settings.lockUseBiometric !== false}
+                onChange={(value) => void toggleBiometric(value)}
+              />
+            </label>
+          ) : null}
+          {changePinOpen && (
             <div className="privacy-lock-setup">
-              <p>Choose a four-digit PIN. On Android, fingerprint unlock is offered when available.</p>
+              <p>Choose a new four-digit PIN. Biometric unlock stays on when your device supports it.</p>
+              <label className="form-field">
+                Current PIN
+                <input
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={4}
+                  value={currentPin}
+                  onChange={(event) => setCurrentPin(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                />
+              </label>
               <label className="form-field">
                 New PIN
                 <input
@@ -133,7 +154,7 @@ export function AppPrivacySettings({ settings, open, onToggleOpen, onSave, onLoc
                 />
               </label>
               <label className="form-field">
-                Confirm PIN
+                Confirm new PIN
                 <input
                   inputMode="numeric"
                   autoComplete="off"
@@ -142,31 +163,12 @@ export function AppPrivacySettings({ settings, open, onToggleOpen, onSave, onLoc
                   onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 4))}
                 />
               </label>
-              {biometricReady && (
-                <label className="settings-row lock-bio-toggle">
-                  <span><Fingerprint size={16} /> Use fingerprint</span>
-                  <Toggle checked={useBiometric} onChange={setUseBiometric} />
-                </label>
-              )}
               {error && <p className="lock-error" role="alert">{error}</p>}
-              <button type="button" className="button-primary" disabled={busy} onClick={() => void enableLock()}>
-                Turn on app lock
+              <button type="button" className="button-primary" disabled={busy} onClick={() => void changePin()}>
+                Save new PIN
               </button>
             </div>
           )}
-          {settings.lockEnabled && (
-            <label className="form-field lock-disable-pin">
-              Current PIN to turn off
-              <input
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={4}
-                value={pin}
-                onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))}
-              />
-            </label>
-          )}
-          {settings.lockEnabled && error && <p className="lock-error" role="alert">{error}</p>}
         </>
       )}
     </section>

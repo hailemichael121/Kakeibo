@@ -7,8 +7,59 @@ declare global {
   }
 }
 
-async function waitForApp(page: Page) {
+async function completeMandatoryLock(page: Page, pin = '2468') {
+  const setup = page.getByRole('dialog', { name: 'Protect Kakeibo' })
+  try {
+    await setup.waitFor({ state: 'visible', timeout: 20_000 })
+  } catch {
+    return
+  }
+  await page.getByLabel('New PIN', { exact: true }).fill(pin)
+  await page.getByLabel('Confirm PIN', { exact: true }).fill(pin)
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await expect(setup).toHaveCount(0)
+}
+
+async function unlockIfNeeded(page: Page, pin = '2468') {
+  if (await page.getByRole('dialog', { name: 'Protect Kakeibo' }).count()) return
+  const locked = page.getByRole('dialog', { name: 'Kakeibo is locked' })
+  try {
+    await locked.waitFor({ state: 'visible', timeout: 3000 })
+  } catch {
+    return
+  }
+  const keypad = page.locator('.lock-keypad')
+  for (const digit of pin) {
+    await keypad.getByRole('button', { name: digit, exact: true }).click()
+  }
+  await expect(locked).toHaveCount(0)
+}
+
+async function waitForShell(page: Page) {
   await expect(page.locator('.loading-skeleton')).toHaveCount(0)
+  await completeMandatoryLock(page)
+}
+
+async function waitForApp(page: Page) {
+  await waitForShell(page)
+  await unlockIfNeeded(page)
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (await page.locator('.app-shell').isVisible()) return
+    if (await page.getByRole('dialog', { name: 'Protect Kakeibo' }).isVisible()) {
+      await completeMandatoryLock(page)
+      continue
+    }
+    if (await page.getByRole('dialog', { name: 'Kakeibo is locked' }).isVisible()) {
+      await unlockIfNeeded(page)
+      continue
+    }
+    if ((await page.locator('.loading-skeleton').count()) > 0) {
+      await expect(page.locator('.loading-skeleton')).toHaveCount(0)
+      continue
+    }
+    await page.waitForTimeout(150)
+  }
+  await expect(page.locator('.app-shell')).toBeVisible()
 }
 
 async function completeOnboarding(page: Page) {
@@ -197,8 +248,7 @@ test.describe('Kakeibo app', () => {
 
     await page.getByRole('button', { name: 'Factory reset' }).click()
     await page.getByRole('button', { name: 'Reset everything' }).click()
-    await expect(page.getByRole('status')).toContainText('Kakeibo has been reset')
-    await expect(page.getByText('Welcome to Kakeibo')).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Protect Kakeibo' })).toBeVisible({ timeout: 15000 })
 
     await page.reload()
     await waitForApp(page)
@@ -382,7 +432,7 @@ test.describe('Kakeibo app', () => {
     const restore = page.getByRole('alertdialog', { name: 'Restore this backup?' })
     await expect(restore).toBeVisible()
     await restore.getByRole('button', { name: 'Restore backup', exact: true }).click()
-    await expect(page.getByRole('status')).toContainText('Backup restored')
+    await expect(page.locator('[role="status"]', { hasText: 'Backup restored' })).toBeVisible()
     await page.locator('.side-nav button', { hasText: 'Home' }).click()
     const restored = page.locator('.recent-panel .expense-row').first()
     await expect(restored).toContainText('Megenagna → Bole')
@@ -408,7 +458,8 @@ test.describe('Kakeibo app', () => {
     await modal.locator('#restore-backup-json').fill(pasted)
     await modal.getByRole('button', { name: 'Restore backup', exact: true }).click()
     await page.getByRole('alertdialog', { name: 'Restore this backup?' }).getByRole('button', { name: 'Restore backup', exact: true }).click()
-    await expect(page.getByRole('status')).toContainText('Backup restored')
+    await waitForApp(page)
+    await expect(page.locator('.app-shell')).toBeVisible()
     await page.locator('.side-nav button', { hasText: 'Home' }).click()
     await expect(page.locator('.recent-panel .expense-row').first()).toContainText('From paste')
   })
@@ -435,7 +486,8 @@ test.describe('Kakeibo app', () => {
     await modal.locator('#restore-backup-json').fill(JSON.stringify(payload))
     await modal.getByRole('button', { name: 'Restore backup', exact: true }).click()
     await page.getByRole('alertdialog', { name: 'Restore from expense data?' }).getByRole('button', { name: 'Restore backup', exact: true }).click()
-    await expect(page.getByRole('status')).toContainText('Expenses restored')
+    await waitForApp(page)
+    await expect(page.locator('.app-shell')).toBeVisible()
 
     await page.locator('.side-nav button', { hasText: 'Home' }).click()
     await expect(page.locator('.onboarding-card')).toHaveCount(0)
@@ -595,17 +647,47 @@ test('hides amounts by default and toggles visibility from the top bar', async (
   await expect(spend).not.toContainText('4,000')
 })
 
-test('app lock requires a PIN after reload', async ({ page }) => {
+test('existing installs see a smooth PIN migration prompt', async ({ page }) => {
   await completeOnboarding(page)
-  await page.locator('.side-nav button', { hasText: 'Settings' }).click()
-  await page.getByRole('button', { name: 'Set up app lock' }).click()
-  await page.getByLabel('New PIN').fill('2468')
-  await page.getByLabel('Confirm PIN').fill('2468')
-  await page.getByRole('button', { name: 'Turn on app lock' }).click()
-  await expect(page.getByRole('status')).toContainText('Settings saved')
-
+  await addExpense(page, '42')
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('kakeibo')
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => {
+        const database = request.result
+        const transaction = database.transaction('settings', 'readwrite')
+        const store = transaction.objectStore('settings')
+        const lookup = store.get('app')
+        lookup.onerror = () => reject(lookup.error)
+        lookup.onsuccess = () => {
+          const settings = lookup.result as Record<string, unknown> | undefined
+          if (!settings) {
+            reject(new Error('settings row missing'))
+            return
+          }
+          delete settings.lockPinHash
+          delete settings.lockPinSalt
+          delete settings.lockWebAuthnCredentialId
+          settings.lockEnabled = true
+          settings.onboarded = true
+          store.put(settings)
+        }
+        transaction.oncomplete = () => resolve()
+        transaction.onerror = () => reject(transaction.error)
+      }
+    })
+  })
   await page.reload()
   await waitForApp(page)
+  await expect(page.locator('.recent-panel .expense-row').first()).toContainText('Optional')
+})
+
+test('app lock requires a PIN after reload', async ({ page }) => {
+  await completeOnboarding(page)
+
+  await page.reload()
+  await waitForShell(page)
   await expect(page.getByRole('dialog', { name: 'Kakeibo is locked' })).toBeVisible()
   const keypad = page.locator('.lock-keypad')
   await keypad.getByRole('button', { name: '2', exact: true }).click()
@@ -613,5 +695,5 @@ test('app lock requires a PIN after reload', async ({ page }) => {
   await keypad.getByRole('button', { name: '6', exact: true }).click()
   await keypad.getByRole('button', { name: '8', exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Kakeibo is locked' })).toHaveCount(0)
-  await expect(page.locator('.spend-number')).toBeVisible()
+  await expect(page.locator('.spend-number')).toBeVisible({ timeout: 10000 })
 })

@@ -84,6 +84,7 @@ export interface AppSettings {
   lockPinHash?: string
   lockPinSalt?: string
   lockUseBiometric?: boolean
+  lockWebAuthnCredentialId?: string
 }
 
 export interface AuditEntry {
@@ -176,7 +177,7 @@ export const defaultSettings = (): AppSettings => ({
   reminderWeeklyEnabled: true,
   reminderWeeklyDay: 0,
   amountsHidden: true,
-  lockEnabled: false,
+  lockEnabled: true,
   lockUseBiometric: true,
 })
 

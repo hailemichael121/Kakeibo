@@ -69,6 +69,11 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+  mainWindow.on('focus', () => {
+    if (mainWindow && !mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.send('kakeibo:desktopResume')
+    }
+  })
 
   // The packaged app should not behave like a browser tab. Block the reload
   // accelerators so Ctrl/Cmd+R and F5 cannot discard the running UI.

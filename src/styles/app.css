@@ -990,6 +990,8 @@ html.widget-quick-add #root { background: transparent !important; }
 
 .privacy-eye { flex: 0 0 36px; }
 .lock-screen { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--base); }
+.lock-setup .lock-card { text-align: left; }
+.lock-setup .button-primary { width: 100%; margin-top: 8px; }
 .lock-card { width: min(420px, 100%); text-align: center; padding: 28px 22px; }
 .lock-logo { width: 52px; height: 52px; margin: 0 auto 12px; }
 .lock-dots { display: flex; justify-content: center; gap: 10px; margin: 16px 0 8px; }

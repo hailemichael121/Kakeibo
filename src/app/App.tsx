@@ -34,6 +34,8 @@ import { confirmDialog, DialogHost, noticeDialog, promptDialog } from './Dialog'
 import { displayAmount, amountsHiddenByDefault, maskAmountText, plainAmountText } from '@/lib/privacy'
 import { AmountPrivacyContext, useAmountsHidden } from './AmountPrivacyContext'
 import { LockScreen } from './LockScreen'
+import { LockSetupScreen } from './LockSetupScreen'
+import { appLockIsActive, deviceLockFields, isLockMigration, needsLockSetup } from '@/lib/lock'
 import { AppPrivacySettings } from './AppPrivacySettings'
 
 type Screen = 'Home' | 'Insights' | 'History' | 'Journal' | 'Settings' | 'Ritual' | 'Audit' | 'Sync' | 'About'
@@ -95,6 +97,7 @@ export function App() {
   const [widgetNudgeVisible, setWidgetNudgeVisible] = useState(() => canAddHomeWidget() && window.localStorage.getItem('kakeibo.widgetNudgeSeen') !== '1')
   const [appLocked, setAppLocked] = useState(false)
   const lockReady = useRef(false)
+  const hiddenAt = useRef(0)
 
   const refresh = useCallback(async (options?: { realignMonth?: boolean }) => {
     await recoverSafetyMirror()
@@ -127,7 +130,7 @@ export function App() {
     setIsLoading(false)
     if (!lockReady.current) {
       lockReady.current = true
-      setAppLocked(Boolean(nextSettings.lockEnabled))
+      setAppLocked(appLockIsActive(nextSettings))
     }
     void updateHomeWidget(monthPlan, activeMonthExpenses, nextSettings)
     void scheduleKakeiboReminders(nextSettings)
@@ -139,6 +142,23 @@ export function App() {
     window.addEventListener('focus', listener)
     return () => window.removeEventListener('focus', listener)
   }, [refresh])
+  useEffect(() => {
+    if (!appLockIsActive(settings)) return
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenAt.current = Date.now()
+        return
+      }
+      if (hiddenAt.current && Date.now() - hiddenAt.current > 45_000) setAppLocked(true)
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+  }, [settings])
+  useEffect(() => {
+    if (!window.kakeibo?.onDesktopResume) return
+    return window.kakeibo.onDesktopResume(() => {
+      if (appLockIsActive(settings)) setAppLocked(true)
+    })
+  }, [settings])
   useEffect(() => onReminderTap((route) => {
     if (route === 'add') {
       setEditing(undefined)
@@ -309,7 +329,23 @@ export function App() {
   }
 
   if (isLoading) return <LoadingSkeleton />
-  if (appLocked && settings.lockEnabled) {
+  if (needsLockSetup(settings)) {
+    return (
+      <AmountPrivacyContext.Provider value={amountsHiddenByDefault(settings)}>
+        <LockSetupScreen
+          upgrading={isLockMigration(settings, !(expenses.length === 0 && !plan && !settings.onboarded))}
+          onSave={async (patch) => {
+            const next = await saveSettings(patch)
+            setSettings(next)
+            setAppLocked(false)
+            lockReady.current = true
+          }}
+        />
+        <DialogHost />
+      </AmountPrivacyContext.Provider>
+    )
+  }
+  if (appLocked && appLockIsActive(settings)) {
     return (
       <AmountPrivacyContext.Provider value={amountsHiddenByDefault(settings)}>
         <LockScreen settings={settings} onUnlocked={() => setAppLocked(false)} />
@@ -1395,6 +1431,7 @@ async function importBackup(source: File | string, refresh: (options?: { realign
       tone: 'danger',
     })
     if (!confirmed) return false
+    const lockToKeep = deviceLockFields((await db.settings.toArray())[0])
     await db.transaction('rw', [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit], async () => {
       for (const table of [db.expenses, db.plans, db.reflections, db.journals, db.settings, db.audit]) await table.clear()
       const tableNames = ['expenses', 'plans', 'reflections', 'journals', 'settings', 'audit'] as const
@@ -1402,16 +1439,18 @@ async function importBackup(source: File | string, refresh: (options?: { realign
         const rows = payload.tables[name] as unknown[] | undefined
         if (name === 'settings') {
           if (restoreSource === 'expense-json' && settingsRows[0]) {
-            await db.settings.put(settingsRows[0])
+            await db.settings.put({ ...settingsRows[0], ...lockToKeep })
           } else if (rows?.length) {
-            const restored = rows.map((row: unknown, index: number) =>
-              index === 0
-                ? normalizeRestoredSettings({ ...defaultSettings(), ...(row as AppSettings) }, plans, expenseCount)
-                : (row as AppSettings),
-            )
+            const restored = rows.map((row: unknown, index: number) => {
+              const base =
+                index === 0
+                  ? normalizeRestoredSettings({ ...defaultSettings(), ...(row as AppSettings) }, plans, expenseCount)
+                  : (row as AppSettings)
+              return index === 0 ? { ...base, ...lockToKeep } : base
+            })
             await db.settings.bulkPut(restored)
           } else {
-            await db.settings.put(normalizeRestoredSettings(defaultSettings(), plans, expenseCount))
+            await db.settings.put({ ...normalizeRestoredSettings(defaultSettings(), plans, expenseCount), ...lockToKeep })
           }
           continue
         }
