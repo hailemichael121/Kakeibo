@@ -1,10 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import type { AppSettings } from '@/db/db'
-
-interface KakeiboLockPlugin {
-  available: () => Promise<{ available: boolean; enrolled: boolean; reason?: string }>
-  authenticate: (options?: { title?: string; subtitle?: string }) => Promise<{ success: boolean; reason?: string }>
-}
+import { KakeiboLock } from './nativePlugins'
 
 function isAndroid(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
@@ -14,17 +10,10 @@ export function isDesktopApp(): boolean {
   return Boolean(typeof window !== 'undefined' && window.kakeibo?.isDesktop)
 }
 
-async function getLockPlugin(): Promise<KakeiboLockPlugin | undefined> {
-  if (!isAndroid()) return undefined
-  const { Plugins } = await import('@capacitor/core')
-  return (Plugins as unknown as Record<string, KakeiboLockPlugin | undefined>).KakeiboLock
-}
-
 async function androidBiometricStatus(): Promise<{ available: boolean; enrolled: boolean }> {
   try {
-    const plugin = await getLockPlugin()
-    if (!plugin) return { available: false, enrolled: false }
-    const result = await plugin.available()
+    if (!isAndroid()) return { available: false, enrolled: false }
+    const result = await KakeiboLock.available()
     return { available: Boolean(result.available), enrolled: Boolean(result.enrolled) }
   } catch {
     return { available: false, enrolled: false }
@@ -62,9 +51,7 @@ export async function biometricUnlockReady(settings: AppSettings): Promise<boole
 export async function unlockWithBiometric(settings: AppSettings): Promise<boolean> {
   if (isAndroid()) {
     try {
-      const plugin = await getLockPlugin()
-      if (!plugin) return false
-      const result = await plugin.authenticate({
+      const result = await KakeiboLock.authenticate({
         title: 'Unlock Kakeibo',
         subtitle: 'Confirm with your fingerprint or face',
       })

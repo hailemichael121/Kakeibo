@@ -174,7 +174,7 @@
         verify: {
           label: "Check the file before installing",
           command: "sha256sum Kakeibo.apk",
-          expected: "7fcd4ee85a5bd5fe36d9d93a7e3c912e89f87595b5f6982ec132adc4f8e4a0e2",
+          expected: "012b88609e2baae3a944648ddb8d69293deef199b108c256df10f88d2dea0463",
           note:
             "Compare with the <a href=\"./downloads/SHA256SUMS\">SHA256SUMS</a> entry for <b>Kakeibo.apk</b>. On a phone, use a checksum app, or copy the APK to a computer and run the command there."
         },
