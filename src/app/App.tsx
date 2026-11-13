@@ -12,6 +12,7 @@ import { db, defaultSettings, monthKey, uid, type AppSettings, type AuditEntry, 
 import { ensureSettings, deleteExpense, recordAudit, resetAllData, restoreExpense, saveExpense, savePlan, saveReflection, saveSettings, type SaveExpenseInput } from '@/db/repo'
 import { recoverSafetyMirror, writeSafetyMirror } from '@/db/safety'
 import { calculateBudget, categoryPercent } from '@/domain/budget'
+import { expenseDisplayTitle } from '@/domain/expenseDisplay'
 import { getBudgetCalendarDates, localDateKey, summarizeExpensesByLocalDay } from '@/domain/calendar'
 import { parseAmount } from '@/domain/amount'
 import { normalizeRestoredSettings, parseBackupText } from '@/domain/backupRestore'
@@ -403,7 +404,7 @@ export function App() {
           </div>
           <div className="top-actions">
             <button
-              className="icon-button privacy-eye"
+              className={`icon-button privacy-eye${screen === 'Home' ? ' privacy-eye--topbar' : ''}`}
               type="button"
               aria-pressed={amountsHidden}
               aria-label={amountsHidden ? 'Show amounts' : 'Hide amounts'}
@@ -415,7 +416,7 @@ export function App() {
             {monthControl}
           </div>
         </header>
-        {screen === 'Home' && <HomeScreen budget={budget} plan={plan} month={month} expenses={expenses} settings={settings} categories={activeCategories} onAdd={openNewExpense} onEdit={(e) => { setEditing(e); setExpenseOpen(true) }} onDelete={handleDelete} onRitual={() => setScreen('Ritual')} onInsights={() => setScreen('Insights')} onPlanSaved={async (values) => { await savePlan({ ...values, id: month }); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onSetupComplete={() => void handleSaveSettings({ onboarded: true })} showWidgetNudge={widgetNudgeVisible && settings.onboarded} onAddWidget={() => void handleAddWidgetFromNudge()} onDismissWidgetNudge={dismissWidgetNudge} />}
+        {screen === 'Home' && <HomeScreen budget={budget} plan={plan} month={month} expenses={expenses} settings={settings} categories={activeCategories} onAdd={openNewExpense} onEdit={(e) => { setEditing(e); setExpenseOpen(true) }} onDelete={handleDelete} onRitual={() => setScreen('Ritual')} onInsights={() => setScreen('Insights')} onPlanSaved={async (values) => { await savePlan({ ...values, id: month }); await refresh(); void updateHomeWidget(plan, expenses.filter((e) => !e.deletedAt), settings) }} onSetupComplete={() => void handleSaveSettings({ onboarded: true })} showWidgetNudge={widgetNudgeVisible && settings.onboarded} onAddWidget={() => void handleAddWidgetFromNudge()} onDismissWidgetNudge={dismissWidgetNudge} onToggleAmountVisibility={() => void toggleAmountVisibility()} />}
         {screen === 'Insights' && <InsightsScreen expenses={expenses} budget={budget} categories={activeCategories} currency={settings.currency} previousSpent={previousSpent} />}
         {screen === 'History' && <HistoryScreen expenses={expenses} categories={activeCategories} currency={settings.currency} search={search} onSearch={setSearch} filter={filterCategory} onFilter={setFilterCategory} onEdit={(e) => { setEditing(e); setExpenseOpen(true) }} onDelete={handleDelete} onExport={() => void exportExcel(expenses, settings.currency, month, notify)} onPdf={() => void exportPdf(expenses, settings.currency, month, notify)} onImport={(rows) => void importExpenses(rows, settings, refresh, notify)} />}
         {screen === 'Journal' && <JournalScreen onChanged={refresh} notify={notify} />}
@@ -455,24 +456,38 @@ function CategoryIcon({ category, size = 17 }: { category: Category; size?: numb
   return <span className="category-icon" style={{ backgroundColor: `${category.color}42`, color: category.color }}><Icon size={size} /></span>
 }
 
-function SpendRing({ left, spendable, currency, savings }: { left: number; spendable: number; currency: string; savings: number }) {
+function SpendRing({ left, spendable, currency, savings, onToggleAmounts }: { left: number; spendable: number; currency: string; savings: number; onToggleAmounts: () => void }) {
   const money = useMoneyFormatter()
+  const hidden = useAmountsHidden()
   const progress = spendable > 0 ? Math.max(0, Math.min(100, (left / spendable) * 100)) : 0
   const circumference = 2 * Math.PI * 40
   return <div className="spend-card glass widget-card spend-card-row">
-    <div className="spend-info"><span className="overline">SPENDABLE LEFT</span><strong className="spend-number">{money(left, currency)}</strong><span className="spend-caption">after fixed costs{savings ? ' and your savings target' : ''}</span><div className="spend-total">Monthly spendable <b>{money(spendable, currency)}</b></div></div>
-    <div className="ring ring-side"><svg viewBox="0 0 100 100" aria-label={`${Math.round(progress)} percent spendable left`}><circle className="ring-track" cx="50" cy="50" r="40" /><circle className="ring-progress" cx="50" cy="50" r="40" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - progress / 100)} /></svg><div className="ring-inner"><span>{Math.round(progress)}%</span><small>left</small></div></div>
+    <div className="spend-info"><span className="overline">SPENDABLE LEFT</span><strong className={`spend-number${hidden ? ' amount-masked' : ''}`}>{money(left, currency)}</strong><span className="spend-caption">after fixed costs{savings ? ' and your savings target' : ''}</span><div className={`spend-total${hidden ? ' spend-total-masked' : ''}`}><span className="spend-total-label">Monthly spendable</span> <b className={hidden ? 'amount-masked' : undefined}>{money(spendable, currency)}</b></div></div>
+    <div className="spend-ring-column">
+      <button
+        type="button"
+        className="icon-button spend-privacy-eye"
+        aria-pressed={hidden}
+        aria-label={hidden ? 'Show amounts' : 'Hide amounts'}
+        title={hidden ? 'Show amounts' : 'Hide amounts'}
+        onClick={onToggleAmounts}
+      >
+        {hidden ? <EyeOff size={17} /> : <Eye size={17} />}
+      </button>
+      <div className="ring ring-side"><svg viewBox="0 0 100 100" aria-label={`${Math.round(progress)} percent spendable left`}><circle className="ring-track" cx="50" cy="50" r="40" /><circle className="ring-progress" cx="50" cy="50" r="40" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - progress / 100)} /></svg><div className="ring-inner"><span>{Math.round(progress)}%</span><small>left</small></div></div>
+    </div>
   </div>
 }
 
 
 
-function HomeScreen({ budget, plan, month, expenses, settings, categories, onAdd, onEdit, onDelete, onRitual, onInsights, onPlanSaved, onSetupComplete, showWidgetNudge, onAddWidget, onDismissWidgetNudge }: {
+function HomeScreen({ budget, plan, month, expenses, settings, categories, onAdd, onEdit, onDelete, onRitual, onInsights, onPlanSaved, onSetupComplete, showWidgetNudge, onAddWidget, onDismissWidgetNudge, onToggleAmountVisibility }: {
   budget: ReturnType<typeof calculateBudget>; plan?: MonthPlan; month: string; expenses: Expense[]; settings: AppSettings; categories: Category[]
   onAdd: () => void; onEdit: (expense: Expense) => void; onDelete: (id: string) => void; onRitual: () => void; onInsights: () => void; onPlanSaved: (plan: Omit<MonthPlan, 'id' | 'updatedAt'>) => Promise<void>; onSetupComplete: () => void
-  showWidgetNudge: boolean; onAddWidget: () => void; onDismissWidgetNudge: () => void
+  showWidgetNudge: boolean; onAddWidget: () => void; onDismissWidgetNudge: () => void; onToggleAmountVisibility: () => void
 }) {
   const money = useMoneyFormatter()
+  const amountsHidden = useAmountsHidden()
   const hasPlan = !!plan
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
@@ -484,13 +499,13 @@ function HomeScreen({ budget, plan, month, expenses, settings, categories, onAdd
       <span className="widget-nudge-copy"><b>Use the Kakeibo home widget</b><small>See spendable left at a glance and tap + Add to log an expense without opening the app.</small></span>
       <div className="widget-nudge-actions"><button className="button-primary widget-nudge-add" onClick={onAddWidget}>Add widget</button><button className="icon-button widget-nudge-close" aria-label="Not now" onClick={onDismissWidgetNudge}><X size={15} /></button></div>
     </section>}
-    <SpendRing left={budget.spendableLeft} spendable={budget.spendable} currency={settings.currency} savings={budget.savings} />
+    <SpendRing left={budget.spendableLeft} spendable={budget.spendable} currency={settings.currency} savings={budget.savings} onToggleAmounts={onToggleAmountVisibility} />
     {budget.startingSpent > 0 && <p className="starting-spend-note">Spendable left includes {money(budget.startingSpent, settings.currency)} spent before Kakeibo.</p>}
     {!hasPlan && <button className="setup-nudge" onClick={onRitual}><span className="nudge-icon"><Heart size={17} /></span><span><b>Begin with your plan</b><small>Add income and fixed costs to see your spendable amount.</small></span><ChevronRight size={19} /></button>}
     <div className="section-head"><div><span className="overline">YOUR MONTH</span><h2>Spending by category</h2></div><button className="text-button" onClick={onInsights}>Insights <ChevronRight size={15} /></button></div>
     <section className="category-grid">{categories.map((category) => {
       const total = budget.byCategory.get(category.name) ?? 0
-      return <div key={category.id} className="category-card soft-card"><div className="cat-card-head"><CategoryIcon category={category} /><span className="category-label">{category.name}</span></div><strong>{money(total, settings.currency)}</strong><div className="mini-track"><i style={{ width: `${categoryPercent(total, budget.trackedSpent)}%`, background: category.color }} /></div><small>{budget.trackedSpent ? Math.round(categoryPercent(total, budget.trackedSpent)) : 0}% of tracked spending</small></div>
+      return <div key={category.id} className="category-card soft-card"><div className="cat-card-head"><CategoryIcon category={category} /><span className="category-label">{category.name}</span></div><strong className={amountsHidden ? 'amount-masked' : undefined}>{money(total, settings.currency)}</strong><div className="mini-track"><i style={{ width: `${categoryPercent(total, budget.trackedSpent)}%`, background: category.color }} /></div><small>{budget.trackedSpent ? Math.round(categoryPercent(total, budget.trackedSpent)) : 0}% of tracked spending</small></div>
     })}</section>
     <section className="two-col">
       <div className="panel recent-panel"><div className="section-head compact"><div><span className="overline">RECENT</span><h2>Last few choices</h2></div><button className="icon-link" aria-label="Open history" onClick={() => onInsights()}><ChevronRight size={17} /></button></div>
@@ -727,6 +742,7 @@ function AboutScreen({ categories, onBack }: { categories: Category[]; onBack: (
 
 function ExpenseRow({ expense, category, currency, onEdit, onDelete }: { expense: Expense; category?: Category; currency: string; onEdit: (expense: Expense) => void; onDelete: (id: string) => void }) {
   const money = useMoneyFormatter()
+  const amountsHidden = useAmountsHidden()
   const touchStart = useRef<number | null>(null)
   const details = [
     expense.from && expense.to ? `${expense.from} → ${expense.to}` : expense.from ? `From ${expense.from}` : expense.to ? `To ${expense.to}` : '',
@@ -738,7 +754,7 @@ function ExpenseRow({ expense, category, currency, onEdit, onDelete }: { expense
     touchStart.current = null
     if (distance < -65) onDelete(expense.id)
     else if (distance > 65) onEdit(expense)
-  }}><CategoryIcon category={category ?? { id: 'other', name: expense.category, icon: 'ShoppingBag', color: '#A8ACCB', archived: false }} /><div className="expense-main"><strong>{expense.note || expense.category}</strong><small>{expense.category} <span>·</span> {new Date(expense.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{expense.pause && <> <span>·</span> {expense.pause}</>}{details && <> <span>·</span> {details}</>}</small></div><strong className="expense-amount">{money(expense.amount, currency)}</strong><div className="row-actions"><button title="Edit expense" onClick={() => onEdit(expense)}><Pencil size={14} /></button><button title="Delete expense" onClick={() => onDelete(expense.id)}><Trash2 size={14} /></button></div></div>
+  }}><CategoryIcon category={category ?? { id: 'other', name: expense.category, icon: 'ShoppingBag', color: '#A8ACCB', archived: false }} /><div className="expense-main"><strong>{expenseDisplayTitle(expense)}</strong><small>{expense.category} <span>·</span> {new Date(expense.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{expense.pause && <> <span>·</span> {expense.pause}</>}{details && <> <span>·</span> {details}</>}</small></div><strong className={`expense-amount${amountsHidden ? ' amount-masked' : ''}`}>{money(expense.amount, currency)}</strong><div className="row-actions"><button title="Edit expense" onClick={() => onEdit(expense)}><Pencil size={14} /></button><button title="Delete expense" onClick={() => onDelete(expense.id)}><Trash2 size={14} /></button></div></div>
 }
 
 function EmptyState({ title, detail }: { title: string; detail: string }) {
@@ -753,10 +769,11 @@ function ExpenseSheet({ expense, categories, currency, onClose, onSave }: {
   const [category, setCategory] = useState(expense?.category ?? categories[0]?.name ?? 'Survival')
   const [pause, setPause] = useState<Expense['pause']>(expense ? expense.pause : 'Needed it')
   const [date, setDate] = useState(expense?.date.slice(0, 10) ?? localDay())
+  const [label, setLabel] = useState(expense?.note ?? '')
   const [from, setFrom] = useState(expense?.from ?? '')
   const [to, setTo] = useState(expense?.to ?? '')
   const [people, setPeople] = useState(expense?.peopleCount ? String(expense.peopleCount) : '')
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(Boolean(expense?.note?.trim() || expense?.from || expense?.to || expense?.peopleCount))
   const detailsRef = useRef<HTMLDivElement>(null)
   const value = Number(digits)
   const keypad = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫']
@@ -797,13 +814,23 @@ function ExpenseSheet({ expense, categories, currency, onClose, onSave }: {
       <div id="expense-details" ref={detailsRef} className={`sheet-details${detailsOpen ? ' open' : ''}`} aria-hidden={!detailsOpen}>
         <div className="sheet-details-inner">
           <div className="sheet-details-grid">
+            <label className="sheet-detail-field sheet-detail-label">
+              <span>Label</span>
+              <input
+                aria-label="Label"
+                value={label}
+                onChange={(event) => setLabel(event.target.value)}
+                placeholder="Optional — shown instead of the category"
+                autoComplete="off"
+              />
+            </label>
             <label className="sheet-detail-field"><span>From</span><input value={from} onChange={(event) => setFrom(event.target.value)} placeholder="Optional" autoComplete="off" /></label>
             <label className="sheet-detail-field"><span>To</span><input value={to} onChange={(event) => setTo(event.target.value)} placeholder="Optional" autoComplete="off" /></label>
             <label className="sheet-detail-field sheet-detail-people"><span>People</span><input type="number" min="1" step="1" inputMode="numeric" value={people} onChange={(event) => setPeople(event.target.value.replace(/\D/g, ''))} placeholder="Optional" /></label>
           </div>
         </div>
       </div>
-      <button className="button-primary save-expense" disabled={!Number.isFinite(value) || value <= 0 || !category} onClick={() => onSave({ amount: value, category, pause, date: new Date(`${date}T12:00:00`).toISOString(), note: expense?.note, from: from.trim() || null, to: to.trim() || null, peopleCount: people ? Number(people) : null }, expense?.id)}>{expense ? 'Save changes' : 'Done'} <Check size={17} /></button>
+      <button className="button-primary save-expense" disabled={!Number.isFinite(value) || value <= 0 || !category} onClick={() => onSave({ amount: value, category, pause, date: new Date(`${date}T12:00:00`).toISOString(), note: label.trim() || undefined, from: from.trim() || null, to: to.trim() || null, peopleCount: people ? Number(people) : null }, expense?.id)}>{expense ? 'Save changes' : 'Done'} <Check size={17} /></button>
       <p className="sheet-footnote">No judgement. Just noticing.</p>
     </section>
   </div>
@@ -1196,7 +1223,7 @@ async function exportPdf(expenses: Expense[], currency: string, month: string, n
       if (y > 275) { pdf.addPage(); y = 20 }
       pdf.setFontSize(9)
       pdf.setTextColor(52, 61, 53)
-      pdf.text(`${expense.date.slice(0, 10)}  ·  ${expense.note || expense.category}${expense.pause ? `  ·  ${expense.pause}` : ''}`, 18, y, { maxWidth: 130 })
+      pdf.text(`${expense.date.slice(0, 10)}  ·  ${expenseDisplayTitle(expense)}${expense.pause ? `  ·  ${expense.pause}` : ''}`, 18, y, { maxWidth: 130 })
       pdf.text(plainAmountText(expense.amount, currency), 190, y, { align: 'right' })
       y += 8
     }

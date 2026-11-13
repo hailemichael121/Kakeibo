@@ -125,8 +125,17 @@ html[data-theme="dark"] .panel { border-color: rgba(255,255,255,.025); }
 @media (max-width: 1080px) { .spend-card { flex-wrap: wrap; align-items: flex-start; min-height: 0; padding: clamp(16px, 4vw, 24px); } }
 .spend-card-row { flex-direction: row; align-items: center; }
 .spend-card-row .spend-info { flex: 1 1 auto; min-width: 0; }
+.spend-ring-column { position: relative; flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.spend-privacy-eye { display: none; width: 32px; height: 32px; flex: none; box-shadow: var(--shadow-raised); background: var(--surface); }
 .ring-side { flex: 0 0 auto; width: 110px; height: 110px; }
 .ring-side svg { width: 110px; height: 110px; }
+.amount-masked { font-size: 0.88em; letter-spacing: 0.02em; line-height: 1.2; font-variant-numeric: normal; }
+.spend-number.amount-masked { font-size: clamp(18px, 5.4vw, 30px) !important; letter-spacing: 0.01em; white-space: nowrap; }
+.spend-total-masked { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 8px; align-items: baseline; }
+.spend-total-masked .spend-total-label { white-space: nowrap; }
+.spend-total-masked b.amount-masked { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.category-card > strong.amount-masked { font-size: 16px; }
+.expense-amount.amount-masked { font-size: 10px; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spend-info { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; flex: 1; }
 .spend-number { margin-top: 10px; font-size: clamp(24px, 7vw, 52px); line-height: 1; letter-spacing: -.055em; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .spend-caption { margin-top: 9px; color: var(--muted); font-size: 12px; }
@@ -230,6 +239,7 @@ html[data-theme="dark"] .panel { border-color: rgba(255,255,255,.025); }
 .sheet-details.open { grid-template-rows: 1fr; margin-top: 7px; opacity: 1; }
 .sheet-details-inner { min-height: 0; overflow: hidden; }
 .sheet-details-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px; padding: 9px; border: 1px solid var(--line); border-radius: 12px; background: var(--base); }
+.sheet-detail-label { grid-column: 1 / -1; }
 .sheet-detail-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--muted); font-size: 9px; font-weight: 600; }
 .sheet-detail-field span { letter-spacing: .08em; }
 .sheet-detail-field input { width: 100%; min-width: 0; min-height: 31px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 11px; font-weight: 500; }
@@ -650,6 +660,11 @@ html[data-theme="dark"] .panel { border-color: rgba(255,255,255,.025); }
   .topbar-brand p { white-space: nowrap; font-size: 10px; }
   .topbar-page-title { display: none; }
   .top-actions { flex: 0 0 auto; justify-content: flex-end; gap: 0; margin-top: 0; }
+  .privacy-eye--topbar { display: none; }
+  .spend-privacy-eye { display: grid; }
+  .spend-card-row { align-items: flex-start; }
+  .spend-ring-column { padding-top: 2px; }
+  .ring-side { width: auto; height: auto; }
   .month-control { gap: 0; }
   .month-control .month-trigger { min-width: 74px; gap: 3px; padding: 0 4px; font-size: 9px; }
   .month-control .month-trigger svg { width: 12px; }
@@ -659,9 +674,9 @@ html[data-theme="dark"] .panel { border-color: rgba(255,255,255,.025); }
   .widget-nudge { align-items: flex-start; gap: 9px; padding: 10px 11px; }
   .widget-nudge-copy b { font-size: 10px; }
   .widget-nudge .widget-nudge-add { min-height: 30px; padding: 0 8px; font-size: 9px; }
-  .spend-card { min-height: 163px; padding: 20px; border-radius: 22px; gap: 12px; }
+  .spend-card { min-height: 163px; padding: 20px; border-radius: 22px; gap: 12px; flex-wrap: nowrap; }
   .spend-number { font-size: clamp(26px, 8vw, 38px); }
-  .spend-total { margin-top: 16px; font-size: 9px; flex-wrap: wrap; }
+  .spend-total { margin-top: 16px; font-size: 9px; flex-wrap: nowrap; align-items: baseline; gap: 5px; }
   .spend-caption { max-width: 170px; line-height: 1.5; font-size: 10px; }
   .ring { width: 91px; height: 91px; padding: 8px; }
   .ring-inner span { font-size: 19px; }
@@ -742,12 +757,25 @@ html[data-theme="dark"] .panel { border-color: rgba(255,255,255,.025); }
   .ritual-stepper i { width: 22px; height: 22px; }
   .ritual-page { padding: 21px 18px; }
   .settings-group { padding: 15px; }
-  .settings-category { min-width: 0; gap: 4px; }
-  .settings-category > .category-icon { width: 24px; height: 24px; flex-basis: 24px; }
-  .settings-category select { flex: 0 0 65px; width: 65px; min-width: 0; max-width: 65px; padding-inline: 2px; font-size: 8px; }
-  .settings-category input[type="color"] { flex: 0 0 22px; width: 22px; }
-  .settings-category button { flex: 0 0 25px; width: 25px; }
-  .settings-category > b { min-width: 35px; font-size: 10px; }
+  .settings-category { min-width: 0; gap: 6px 8px; align-items: center; padding: 11px 0; }
+  .settings-category:not(:has(> input[type="text"])) {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 32px 28px 28px;
+    grid-template-rows: auto auto;
+  }
+  .settings-category > .category-icon { width: 28px; height: 28px; grid-column: 1; grid-row: 1 / span 2; align-self: start; margin-top: 1px; }
+  .settings-category > b { grid-column: 2 / -1; grid-row: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .settings-category > select { grid-column: 2; grid-row: 2; width: 100%; min-width: 0; max-width: none; flex: none; font-size: 10px; }
+  .settings-category > input[type="color"] { grid-column: 3; grid-row: 2; width: 32px; height: 32px; flex: none; border-radius: 9px; overflow: hidden; }
+  .settings-category > button { grid-row: 2; flex: none; width: 28px; height: 28px; }
+  .settings-category > button:first-of-type { grid-column: 4; }
+  .settings-category > button:last-of-type { grid-column: 5; }
+  .settings-category:has(> input[type="text"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .settings-category:has(> input[type="text"]) > input[type="text"] { flex: 1 1 100%; width: 100%; }
     .settings-number { width: 112px; }
     .settings-row select { min-width: 120px; max-width: 155px; }
   .data-actions { gap: 6px; }
